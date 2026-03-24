@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -35,11 +34,3 @@ func main() {
 	}
 }
 
-func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
-	// TODO: implement in server.go (Task 13)
-	_ = ctx
-	_ = cfg
-	_ = logger
-	fmt.Fprintln(os.Stderr, "autotask-mcp "+version+" starting...")
-	return nil
-}
