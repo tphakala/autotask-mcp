@@ -14,7 +14,7 @@ import (
 // NOTE: For now, leave the body as a placeholder that just returns.
 // The individual Register*Tools functions will be added in Tasks 6-12.
 func RegisterAll(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache, picklist *services.PicklistCache) {
-	// Will be populated as tool categories are implemented
+	RegisterTicketTools(s, client, mapper)
 }
 
 // entityToMap converts a typed entity to map[string]any for formatting/enhancement.
