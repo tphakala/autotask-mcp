@@ -10,6 +10,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	autotask "github.com/tphakala/go-autotask"
+	"github.com/tphakala/autotask-mcp/resources"
 	"github.com/tphakala/autotask-mcp/services"
 	"github.com/tphakala/autotask-mcp/tools"
 )
@@ -26,6 +27,7 @@ func buildServer(client *autotask.Client) *mcp.Server {
 	mapper := services.NewMappingCache(client)
 	picklist := services.NewPicklistCache(client)
 	tools.RegisterAll(s, client, mapper, picklist)
+	resources.RegisterAll(s, client)
 
 	return s
 }
