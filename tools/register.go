@@ -12,9 +12,8 @@ import (
 )
 
 // RegisterAll registers every tool category with the MCP server.
-// NOTE: For now, leave the body as a placeholder that just returns.
-// The individual Register*Tools functions will be added in Tasks 6-12.
 func RegisterAll(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache, picklist *services.PicklistCache) {
+	RegisterConnectionTools(s, client)
 	RegisterTicketTools(s, client, mapper)
 	RegisterCompanyTools(s, client, mapper)
 	RegisterContactTools(s, client, mapper)
@@ -22,6 +21,14 @@ func RegisterAll(s *mcp.Server, client *autotask.Client, mapper *services.Mappin
 	RegisterTimeEntryTools(s, client, mapper)
 	RegisterProjectTools(s, client, mapper)
 	RegisterTaskTools(s, client, mapper)
+	RegisterNoteTools(s, client)
+	RegisterAttachmentTools(s, client)
+	RegisterFinancialTools(s, client, mapper)
+	RegisterSalesTools(s, client)
+	RegisterConfigItemTools(s, client, mapper)
+	RegisterBillingTools(s, client, mapper)
+	RegisterExpenseTools(s, client)
+	RegisterPicklistTools(s, client, picklist)
 }
 
 // entityToMap converts a typed entity to map[string]any for formatting/enhancement.
