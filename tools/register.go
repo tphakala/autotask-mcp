@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
-	autotask "github.com/tphakala/go-autotask"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/autotask-mcp/services"
 )
 
@@ -15,6 +16,12 @@ import (
 // The individual Register*Tools functions will be added in Tasks 6-12.
 func RegisterAll(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache, picklist *services.PicklistCache) {
 	RegisterTicketTools(s, client, mapper)
+	RegisterCompanyTools(s, client, mapper)
+	RegisterContactTools(s, client, mapper)
+	RegisterResourceTools(s, client)
+	RegisterTimeEntryTools(s, client, mapper)
+	RegisterProjectTools(s, client, mapper)
+	RegisterTaskTools(s, client, mapper)
 }
 
 // entityToMap converts a typed entity to map[string]any for formatting/enhancement.
@@ -100,4 +107,13 @@ func defaultPage(requested int) int {
 		return 1
 	}
 	return requested
+}
+
+// parseDate parses a date string in YYYY-MM-DD or RFC3339 format.
+func parseDate(s string) (time.Time, error) {
+	t, err := time.Parse("2006-01-02", s)
+	if err == nil {
+		return t, nil
+	}
+	return time.Parse(time.RFC3339, s)
 }
