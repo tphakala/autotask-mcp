@@ -98,7 +98,7 @@ func TestSearchResourcesHandler_WithFilters(t *testing.T) {
 	in := SearchResourcesInput{
 		SearchTerm:   "John",
 		IsActive:     &active,
-		ResourceType: 1,
+		ResourceType: "Employee",
 		Page:         1,
 		PageSize:     10,
 	}

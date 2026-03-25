@@ -12,7 +12,7 @@ import (
 type SearchResourcesInput struct {
 	SearchTerm   string `json:"searchTerm,omitempty" jsonschema:"Search term for resource name or email"`
 	IsActive     *bool  `json:"isActive,omitempty" jsonschema:"Filter by active status"`
-	ResourceType int    `json:"resourceType,omitempty" jsonschema:"Filter by resource type (1=Employee, 2=Contractor, 3=Temporary)"`
+	ResourceType string `json:"resourceType,omitempty" jsonschema:"Filter by resource type (Employee, Contractor, Temporary)"`
 	Page         int    `json:"page,omitempty" jsonschema:"Page number (default 1)"`
 	PageSize     int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
 }
@@ -42,7 +42,7 @@ func searchResourcesHandler(client *autotask.Client) func(ctx context.Context, r
 		if in.IsActive != nil {
 			q.Where("isActive", autotask.OpEq, *in.IsActive)
 		}
-		if in.ResourceType != 0 {
+		if in.ResourceType != "" {
 			q.Where("resourceType", autotask.OpEq, in.ResourceType)
 		}
 
