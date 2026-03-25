@@ -27,7 +27,7 @@ type CreateProjectInput struct {
 	Description    string  `json:"description,omitempty" jsonschema:"Project description"`
 	StartDate      string  `json:"startDate,omitempty" jsonschema:"Start date (YYYY-MM-DD or ISO format)"`
 	EndDate        string  `json:"endDate,omitempty" jsonschema:"End date (YYYY-MM-DD or ISO format)"`
-	EstimatedHours float64 `json:"estimatedHours,omitempty" jsonschema:"Estimated hours"`
+	EstimatedHours *float64 `json:"estimatedHours,omitempty" jsonschema:"Estimated hours"`
 }
 
 // RegisterProjectTools registers all project-related MCP tools with the server.
@@ -105,8 +105,8 @@ func createProjectHandler(client *autotask.Client) func(ctx context.Context, req
 			}
 			project.EndDateTime = autotask.Set(t)
 		}
-		if in.EstimatedHours != 0 {
-			project.EstimatedHours = autotask.Set(in.EstimatedHours)
+		if in.EstimatedHours != nil {
+			project.EstimatedHours = autotask.Set(*in.EstimatedHours)
 		}
 
 		created, err := autotask.Create[entities.Project](ctx, client, project)

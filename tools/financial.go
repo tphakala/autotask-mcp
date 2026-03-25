@@ -62,7 +62,7 @@ type CreateQuoteItemInput struct {
 	UnitDiscount       float64 `json:"unitDiscount,omitempty" jsonschema:"Unit discount amount"`
 	LineDiscount       float64 `json:"lineDiscount,omitempty" jsonschema:"Line discount amount"`
 	PercentageDiscount float64 `json:"percentageDiscount,omitempty" jsonschema:"Percentage discount"`
-	IsOptional         bool    `json:"isOptional,omitempty" jsonschema:"Whether the item is optional"`
+	IsOptional         *bool   `json:"isOptional,omitempty" jsonschema:"Whether the item is optional"`
 	ServiceID          int64   `json:"serviceID,omitempty" jsonschema:"Service ID (sets quoteItemType=11)"`
 	ProductID          int64   `json:"productID,omitempty" jsonschema:"Product ID (sets quoteItemType=1)"`
 	ServiceBundleID    int64   `json:"serviceBundleID,omitempty" jsonschema:"Service bundle ID (sets quoteItemType=12)"`
@@ -72,14 +72,14 @@ type CreateQuoteItemInput struct {
 
 // UpdateQuoteItemInput defines the input parameters for updating a quote item.
 type UpdateQuoteItemInput struct {
-	QuoteItemID        int64   `json:"quoteItemId" jsonschema:"Quote item ID to update"`
-	Quantity           float64 `json:"quantity,omitempty" jsonschema:"Updated quantity"`
-	UnitPrice          float64 `json:"unitPrice,omitempty" jsonschema:"Updated unit price"`
-	UnitDiscount       float64 `json:"unitDiscount,omitempty" jsonschema:"Updated unit discount"`
-	LineDiscount       float64 `json:"lineDiscount,omitempty" jsonschema:"Updated line discount"`
-	PercentageDiscount float64 `json:"percentageDiscount,omitempty" jsonschema:"Updated percentage discount"`
-	IsOptional         *bool   `json:"isOptional,omitempty" jsonschema:"Updated optional flag"`
-	SortOrderID        int     `json:"sortOrderID,omitempty" jsonschema:"Updated sort order"`
+	QuoteItemID        int64    `json:"quoteItemId" jsonschema:"Quote item ID to update"`
+	Quantity           *float64 `json:"quantity,omitempty" jsonschema:"Updated quantity"`
+	UnitPrice          *float64 `json:"unitPrice,omitempty" jsonschema:"Updated unit price"`
+	UnitDiscount       *float64 `json:"unitDiscount,omitempty" jsonschema:"Updated unit discount"`
+	LineDiscount       *float64 `json:"lineDiscount,omitempty" jsonschema:"Updated line discount"`
+	PercentageDiscount *float64 `json:"percentageDiscount,omitempty" jsonschema:"Updated percentage discount"`
+	IsOptional         *bool    `json:"isOptional,omitempty" jsonschema:"Updated optional flag"`
+	SortOrderID        *int     `json:"sortOrderID,omitempty" jsonschema:"Updated sort order"`
 }
 
 // DeleteQuoteItemInput defines the input parameters for deleting a quote item.
@@ -393,8 +393,8 @@ func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 		if in.PercentageDiscount != 0 {
 			payload["percentageDiscount"] = in.PercentageDiscount
 		}
-		if in.IsOptional {
-			payload["isOptional"] = in.IsOptional
+		if in.IsOptional != nil {
+			payload["isOptional"] = *in.IsOptional
 		}
 		if in.ProductID != 0 {
 			payload["productID"] = in.ProductID
@@ -452,26 +452,26 @@ func updateQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 			"id": in.QuoteItemID,
 		}
 
-		if in.Quantity != 0 {
-			payload["quantity"] = in.Quantity
+		if in.Quantity != nil {
+			payload["quantity"] = *in.Quantity
 		}
-		if in.UnitPrice != 0 {
-			payload["unitPrice"] = in.UnitPrice
+		if in.UnitPrice != nil {
+			payload["unitPrice"] = *in.UnitPrice
 		}
-		if in.UnitDiscount != 0 {
-			payload["unitDiscount"] = in.UnitDiscount
+		if in.UnitDiscount != nil {
+			payload["unitDiscount"] = *in.UnitDiscount
 		}
-		if in.LineDiscount != 0 {
-			payload["lineDiscount"] = in.LineDiscount
+		if in.LineDiscount != nil {
+			payload["lineDiscount"] = *in.LineDiscount
 		}
-		if in.PercentageDiscount != 0 {
-			payload["percentageDiscount"] = in.PercentageDiscount
+		if in.PercentageDiscount != nil {
+			payload["percentageDiscount"] = *in.PercentageDiscount
 		}
 		if in.IsOptional != nil {
 			payload["isOptional"] = *in.IsOptional
 		}
-		if in.SortOrderID != 0 {
-			payload["sortOrderID"] = in.SortOrderID
+		if in.SortOrderID != nil {
+			payload["sortOrderID"] = *in.SortOrderID
 		}
 
 		updated, err := autotask.UpdateRaw(ctx, client, "QuoteItems", payload)

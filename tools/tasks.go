@@ -27,7 +27,7 @@ type CreateTaskInput struct {
 	Status             int     `json:"status" jsonschema:"Task status (1=New, 2=In Progress, 5=Complete)"`
 	Description        string  `json:"description,omitempty" jsonschema:"Task description"`
 	AssignedResourceID int64   `json:"assignedResourceID,omitempty" jsonschema:"Assigned resource ID"`
-	EstimatedHours     float64 `json:"estimatedHours,omitempty" jsonschema:"Estimated hours"`
+	EstimatedHours     *float64 `json:"estimatedHours,omitempty" jsonschema:"Estimated hours"`
 	StartDateTime      string  `json:"startDateTime,omitempty" jsonschema:"Start date/time (ISO format)"`
 	EndDateTime        string  `json:"endDateTime,omitempty" jsonschema:"End date/time (ISO format)"`
 }
@@ -99,8 +99,8 @@ func createTaskHandler(client *autotask.Client) func(ctx context.Context, req *m
 		if in.AssignedResourceID != 0 {
 			task.AssignedResourceID = autotask.Set(in.AssignedResourceID)
 		}
-		if in.EstimatedHours != 0 {
-			task.EstimatedHours = autotask.Set(in.EstimatedHours)
+		if in.EstimatedHours != nil {
+			task.EstimatedHours = autotask.Set(*in.EstimatedHours)
 		}
 		if in.StartDateTime != "" {
 			t, err := parseDate(in.StartDateTime)
