@@ -115,12 +115,17 @@ func RegisterNoteTools(s *mcp.Server, client *autotask.Client) {
 // getTicketNoteHandler returns a handler that retrieves a single ticket note by ID.
 func getTicketNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketNoteInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketNoteInput) (*mcp.CallToolResult, any, error) {
-		note, err := autotask.GetRaw(ctx, client, "TicketNotes", in.NoteID)
+		note, err := autotask.Get[entities.TicketNote](ctx, client, in.NoteID)
 		if err != nil {
 			return errorResult("failed to get ticket note %d: %v", in.NoteID, err)
 		}
 
-		data, err := json.MarshalIndent(note, "", "  ")
+		m, err := entityToMap(note)
+		if err != nil {
+			return errorResult("failed to convert ticket note: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal ticket note: %v", err)
 		}
@@ -197,12 +202,17 @@ func createTicketNoteHandler(client *autotask.Client) func(ctx context.Context, 
 // getProjectNoteHandler returns a handler that retrieves a single project note by ID.
 func getProjectNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetProjectNoteInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in GetProjectNoteInput) (*mcp.CallToolResult, any, error) {
-		note, err := autotask.GetRaw(ctx, client, "ProjectNotes", in.NoteID)
+		note, err := autotask.Get[entities.ProjectNote](ctx, client, in.NoteID)
 		if err != nil {
 			return errorResult("failed to get project note %d: %v", in.NoteID, err)
 		}
 
-		data, err := json.MarshalIndent(note, "", "  ")
+		m, err := entityToMap(note)
+		if err != nil {
+			return errorResult("failed to convert project note: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal project note: %v", err)
 		}
@@ -265,12 +275,17 @@ func createProjectNoteHandler(client *autotask.Client) func(ctx context.Context,
 // getCompanyNoteHandler returns a handler that retrieves a single company note by ID.
 func getCompanyNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetCompanyNoteInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in GetCompanyNoteInput) (*mcp.CallToolResult, any, error) {
-		note, err := autotask.GetRaw(ctx, client, "CompanyNotes", in.NoteID)
+		note, err := autotask.Get[entities.CompanyNote](ctx, client, in.NoteID)
 		if err != nil {
 			return errorResult("failed to get company note %d: %v", in.NoteID, err)
 		}
 
-		data, err := json.MarshalIndent(note, "", "  ")
+		m, err := entityToMap(note)
+		if err != nil {
+			return errorResult("failed to convert company note: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal company note: %v", err)
 		}

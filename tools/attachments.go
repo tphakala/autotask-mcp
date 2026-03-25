@@ -6,6 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	autotask "github.com/tphakala/go-autotask"
+	"github.com/tphakala/go-autotask/entities"
 )
 
 // GetTicketAttachmentInput defines the input parameters for getting a ticket attachment.
@@ -34,12 +35,17 @@ func RegisterAttachmentTools(s *mcp.Server, client *autotask.Client) {
 // getTicketAttachmentHandler returns a handler that retrieves a single ticket attachment.
 func getTicketAttachmentHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketAttachmentInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketAttachmentInput) (*mcp.CallToolResult, any, error) {
-		attachment, err := autotask.GetRaw(ctx, client, "TicketAttachments", in.AttachmentID)
+		attachment, err := autotask.Get[entities.TicketAttachment](ctx, client, in.AttachmentID)
 		if err != nil {
 			return errorResult("failed to get ticket attachment %d: %v", in.AttachmentID, err)
 		}
 
-		data, err := json.MarshalIndent(attachment, "", "  ")
+		m, err := entityToMap(attachment)
+		if err != nil {
+			return errorResult("failed to convert ticket attachment: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal ticket attachment: %v", err)
 		}

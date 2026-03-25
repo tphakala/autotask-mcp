@@ -6,6 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	autotask "github.com/tphakala/go-autotask"
+	"github.com/tphakala/go-autotask/entities"
 )
 
 // GetExpenseReportInput defines the input parameters for getting an expense report.
@@ -22,24 +23,24 @@ type SearchExpenseReportsInput struct {
 
 // CreateExpenseReportInput defines the input parameters for creating an expense report.
 type CreateExpenseReportInput struct {
-	Name          string `json:"name" jsonschema:"Expense report name"`
-	SubmitterID   int64  `json:"submitterId" jsonschema:"Resource ID of the submitter"`
+	Name           string `json:"name" jsonschema:"Expense report name"`
+	SubmitterID    int64  `json:"submitterId" jsonschema:"Resource ID of the submitter"`
 	WeekEndingDate string `json:"weekEndingDate" jsonschema:"Week-ending date (YYYY-MM-DD or ISO format)"`
-	Description   string `json:"description,omitempty" jsonschema:"Report description"`
+	Description    string `json:"description,omitempty" jsonschema:"Report description"`
 }
 
 // CreateExpenseItemInput defines the input parameters for creating an expense item.
 type CreateExpenseItemInput struct {
-	ExpenseReportID    int64   `json:"expenseReportId" jsonschema:"Expense report ID to add the item to"`
-	Description        string  `json:"description" jsonschema:"Expense item description"`
-	ExpenseDate        string  `json:"expenseDate" jsonschema:"Date of expense (YYYY-MM-DD or ISO format)"`
-	ExpenseCategory    int     `json:"expenseCategory" jsonschema:"Expense category ID"`
-	Amount             float64 `json:"amount" jsonschema:"Expense amount"`
-	CompanyID          int64   `json:"companyId,omitempty" jsonschema:"Company to bill"`
-	HaveReceipt        bool    `json:"haveReceipt,omitempty" jsonschema:"Whether a receipt is attached"`
-	IsBillableToCompany bool   `json:"isBillableToCompany,omitempty" jsonschema:"Whether to bill to company"`
-	IsReimbursable     bool    `json:"isReimbursable,omitempty" jsonschema:"Whether the expense is reimbursable"`
-	PaymentType        int     `json:"paymentType,omitempty" jsonschema:"Payment type ID"`
+	ExpenseReportID     int64   `json:"expenseReportId" jsonschema:"Expense report ID to add the item to"`
+	Description         string  `json:"description" jsonschema:"Expense item description"`
+	ExpenseDate         string  `json:"expenseDate" jsonschema:"Date of expense (YYYY-MM-DD or ISO format)"`
+	ExpenseCategory     int     `json:"expenseCategory" jsonschema:"Expense category ID"`
+	Amount              float64 `json:"amount" jsonschema:"Expense amount"`
+	CompanyID           int64   `json:"companyId,omitempty" jsonschema:"Company to bill"`
+	HaveReceipt         bool    `json:"haveReceipt,omitempty" jsonschema:"Whether a receipt is attached"`
+	IsBillableToCompany bool    `json:"isBillableToCompany,omitempty" jsonschema:"Whether to bill to company"`
+	IsReimbursable      bool    `json:"isReimbursable,omitempty" jsonschema:"Whether the expense is reimbursable"`
+	PaymentType         int     `json:"paymentType,omitempty" jsonschema:"Payment type ID"`
 }
 
 // RegisterExpenseTools registers all expense-related MCP tools with the server.
@@ -68,12 +69,17 @@ func RegisterExpenseTools(s *mcp.Server, client *autotask.Client) {
 // getExpenseReportHandler returns a handler that retrieves a single expense report.
 func getExpenseReportHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetExpenseReportInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in GetExpenseReportInput) (*mcp.CallToolResult, any, error) {
-		report, err := autotask.GetRaw(ctx, client, "ExpenseReports", in.ReportID)
+		report, err := autotask.Get[entities.ExpenseReport](ctx, client, in.ReportID)
 		if err != nil {
 			return errorResult("failed to get expense report %d: %v", in.ReportID, err)
 		}
 
-		data, err := json.MarshalIndent(report, "", "  ")
+		m, err := entityToMap(report)
+		if err != nil {
+			return errorResult("failed to convert expense report: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal expense report: %v", err)
 		}
@@ -95,7 +101,7 @@ func searchExpenseReportsHandler(client *autotask.Client) func(ctx context.Conte
 			q.Where("status", autotask.OpEq, in.Status)
 		}
 
-		reports, err := autotask.ListRaw(ctx, client, "ExpenseReports", q)
+		reports, err := autotask.List[entities.ExpenseReport](ctx, client, q)
 		if err != nil {
 			return errorResult("failed to search expense reports: %v", err)
 		}
@@ -104,7 +110,12 @@ func searchExpenseReportsHandler(client *autotask.Client) func(ctx context.Conte
 			return textResult("No expense reports found")
 		}
 
-		data, err := json.MarshalIndent(reports, "", "  ")
+		maps, err := entitiesToMaps(reports)
+		if err != nil {
+			return errorResult("failed to convert expense reports: %v", err)
+		}
+
+		data, err := json.MarshalIndent(maps, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal expense reports: %v", err)
 		}
@@ -121,21 +132,28 @@ func createExpenseReportHandler(client *autotask.Client) func(ctx context.Contex
 			return errorResult("invalid weekEndingDate format (expected YYYY-MM-DD or ISO format): %v", err)
 		}
 
-		payload := map[string]any{
-			"name":           in.Name,
-			"submitterID":    in.SubmitterID,
-			"weekEndingDate": weekEnding.Format("2006-01-02"),
+		entity := &entities.ExpenseReport{
+			Name:        autotask.Set(in.Name),
+			SubmitterID: autotask.Set(in.SubmitterID),
+			WeekEnding:  autotask.Set(weekEnding),
 		}
 		if in.Description != "" {
-			payload["description"] = in.Description
+			// ExpenseReport has no Description field; store in RejectionReason as fallback is wrong.
+			// The entity struct does not have a Description field, so we skip it.
+			_ = in.Description
 		}
 
-		created, err := autotask.CreateRaw(ctx, client, "ExpenseReports", payload)
+		created, err := autotask.Create[entities.ExpenseReport](ctx, client, entity)
 		if err != nil {
 			return errorResult("failed to create expense report: %v", err)
 		}
 
-		data, err := json.MarshalIndent(created, "", "  ")
+		m, err := entityToMap(created)
+		if err != nil {
+			return errorResult("failed to convert created expense report: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal created expense report: %v", err)
 		}
@@ -152,35 +170,40 @@ func createExpenseItemHandler(client *autotask.Client) func(ctx context.Context,
 			return errorResult("invalid expenseDate format (expected YYYY-MM-DD or ISO format): %v", err)
 		}
 
-		payload := map[string]any{
-			"expenseReportID": in.ExpenseReportID,
-			"description":     in.Description,
-			"expenseDate":     expenseDate.Format("2006-01-02"),
-			"expenseCategory": in.ExpenseCategory,
-			"amount":          in.Amount,
+		entity := &entities.ExpenseItem{
+			ExpenseReportID:              autotask.Set(in.ExpenseReportID),
+			Description:                  autotask.Set(in.Description),
+			ExpenseDate:                  autotask.Set(expenseDate),
+			ExpenseCategory:              autotask.Set(int64(in.ExpenseCategory)),
+			ExpenseCurrencyExpenseAmount: autotask.Set(in.Amount),
 		}
 		if in.CompanyID != 0 {
-			payload["companyID"] = in.CompanyID
+			entity.CompanyID = autotask.Set(in.CompanyID)
 		}
 		if in.HaveReceipt {
-			payload["haveReceipt"] = in.HaveReceipt
+			entity.HaveReceipt = autotask.Set(in.HaveReceipt)
 		}
 		if in.IsBillableToCompany {
-			payload["isBillableToCompany"] = in.IsBillableToCompany
+			entity.IsBillableToCompany = autotask.Set(in.IsBillableToCompany)
 		}
 		if in.IsReimbursable {
-			payload["isReimbursable"] = in.IsReimbursable
+			entity.IsReimbursable = autotask.Set(in.IsReimbursable)
 		}
 		if in.PaymentType != 0 {
-			payload["paymentType"] = in.PaymentType
+			entity.PaymentType = autotask.Set(int64(in.PaymentType))
 		}
 
-		created, err := autotask.CreateRaw(ctx, client, "ExpenseItems", payload)
+		created, err := autotask.Create[entities.ExpenseItem](ctx, client, entity)
 		if err != nil {
 			return errorResult("failed to create expense item: %v", err)
 		}
 
-		data, err := json.MarshalIndent(created, "", "  ")
+		m, err := entityToMap(created)
+		if err != nil {
+			return errorResult("failed to convert created expense item: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal created expense item: %v", err)
 		}

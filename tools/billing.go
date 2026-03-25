@@ -6,6 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	autotask "github.com/tphakala/go-autotask"
+	"github.com/tphakala/go-autotask/entities"
 	"github.com/tphakala/autotask-mcp/services"
 )
 
@@ -62,12 +63,17 @@ func getBillingItemHandler(client *autotask.Client) func(ctx context.Context, re
 		if in.BillingItemID == 0 {
 			return errorResult("billingItemId is required")
 		}
-		item, err := autotask.GetRaw(ctx, client, "BillingItems", in.BillingItemID)
+		item, err := autotask.Get[entities.BillingItem](ctx, client, in.BillingItemID)
 		if err != nil {
 			return errorResult("failed to get billing item %d: %v", in.BillingItemID, err)
 		}
 
-		data, err := json.MarshalIndent(item, "", "  ")
+		m, err := entityToMap(item)
+		if err != nil {
+			return errorResult("failed to convert billing item: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal billing item: %v", err)
 		}
@@ -105,7 +111,7 @@ func searchBillingItemsHandler(client *autotask.Client, mapper *services.Mapping
 			q.Where("postedDate", autotask.OpLte, in.PostedBefore)
 		}
 
-		items, err := autotask.ListRaw(ctx, client, "BillingItems", q)
+		items, err := autotask.List[entities.BillingItem](ctx, client, q)
 		if err != nil {
 			return errorResult("failed to search billing items: %v", err)
 		}
@@ -114,7 +120,12 @@ func searchBillingItemsHandler(client *autotask.Client, mapper *services.Mapping
 			return textResult("No billing items found")
 		}
 
-		return searchResult(ctx, mapper, items, "autotask_search_billing_items", page, pageSize)
+		maps, err := entitiesToMaps(items)
+		if err != nil {
+			return errorResult("failed to convert billing items: %v", err)
+		}
+
+		return searchResult(ctx, mapper, maps, "autotask_search_billing_items", page, pageSize)
 	}
 }
 
@@ -141,7 +152,7 @@ func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx co
 			q.Where("approvedDate", autotask.OpLte, in.ApprovedBefore)
 		}
 
-		levels, err := autotask.ListRaw(ctx, client, "BillingItemApprovalLevels", q)
+		levels, err := autotask.List[entities.BillingItemApprovalLevel](ctx, client, q)
 		if err != nil {
 			return errorResult("failed to search billing item approval levels: %v", err)
 		}
@@ -150,6 +161,11 @@ func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx co
 			return textResult("No billing item approval levels found")
 		}
 
-		return searchResult(ctx, nil, levels, "autotask_search_billing_item_approval_levels", page, pageSize)
+		maps, err := entitiesToMaps(levels)
+		if err != nil {
+			return errorResult("failed to convert billing item approval levels: %v", err)
+		}
+
+		return searchResult(ctx, nil, maps, "autotask_search_billing_item_approval_levels", page, pageSize)
 	}
 }

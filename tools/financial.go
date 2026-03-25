@@ -105,21 +105,21 @@ type SearchOpportunitiesInput struct {
 
 // CreateOpportunityInput defines the input parameters for creating an opportunity.
 type CreateOpportunityInput struct {
-	Title                  string  `json:"title" jsonschema:"Opportunity title"`
-	CompanyID              int64   `json:"companyId" jsonschema:"Company ID"`
-	OwnerResourceID        int64   `json:"ownerResourceId" jsonschema:"Owner resource ID"`
-	Status                 int     `json:"status" jsonschema:"Status ID"`
-	Stage                  int     `json:"stage" jsonschema:"Stage ID"`
-	ProjectedCloseDate     string  `json:"projectedCloseDate" jsonschema:"Projected close date (YYYY-MM-DD or ISO format)"`
-	StartDate              string  `json:"startDate" jsonschema:"Start date (YYYY-MM-DD or ISO format)"`
-	Probability            int     `json:"probability,omitempty" jsonschema:"Win probability percentage"`
-	Amount                 float64 `json:"amount,omitempty" jsonschema:"Opportunity amount"`
-	Cost                   float64 `json:"cost,omitempty" jsonschema:"Opportunity cost"`
-	UseQuoteTotals         bool    `json:"useQuoteTotals,omitempty" jsonschema:"Whether to use quote totals"`
-	TotalAmountMonths      int     `json:"totalAmountMonths,omitempty" jsonschema:"Total amount months"`
-	ContactID              int64   `json:"contactId,omitempty" jsonschema:"Contact ID"`
-	Description            string  `json:"description,omitempty" jsonschema:"Description"`
-	OpportunityCategoryID  int     `json:"opportunityCategoryID,omitempty" jsonschema:"Opportunity category ID"`
+	Title                 string  `json:"title" jsonschema:"Opportunity title"`
+	CompanyID             int64   `json:"companyId" jsonschema:"Company ID"`
+	OwnerResourceID       int64   `json:"ownerResourceId" jsonschema:"Owner resource ID"`
+	Status                int     `json:"status" jsonschema:"Status ID"`
+	Stage                 int     `json:"stage" jsonschema:"Stage ID"`
+	ProjectedCloseDate    string  `json:"projectedCloseDate" jsonschema:"Projected close date (YYYY-MM-DD or ISO format)"`
+	StartDate             string  `json:"startDate" jsonschema:"Start date (YYYY-MM-DD or ISO format)"`
+	Probability           int     `json:"probability,omitempty" jsonschema:"Win probability percentage"`
+	Amount                float64 `json:"amount,omitempty" jsonschema:"Opportunity amount"`
+	Cost                  float64 `json:"cost,omitempty" jsonschema:"Opportunity cost"`
+	UseQuoteTotals        bool    `json:"useQuoteTotals,omitempty" jsonschema:"Whether to use quote totals"`
+	TotalAmountMonths     int     `json:"totalAmountMonths,omitempty" jsonschema:"Total amount months"`
+	ContactID             int64   `json:"contactId,omitempty" jsonschema:"Contact ID"`
+	Description           string  `json:"description,omitempty" jsonschema:"Description"`
+	OpportunityCategoryID int     `json:"opportunityCategoryID,omitempty" jsonschema:"Opportunity category ID"`
 }
 
 // --- Invoice inputs ---
@@ -218,12 +218,17 @@ func RegisterFinancialTools(s *mcp.Server, client *autotask.Client, mapper *serv
 // getQuoteHandler returns a handler that retrieves a single quote.
 func getQuoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteInput) (*mcp.CallToolResult, any, error) {
-		quote, err := autotask.GetRaw(ctx, client, "Quotes", in.QuoteID)
+		quote, err := autotask.Get[entities.Quote](ctx, client, in.QuoteID)
 		if err != nil {
 			return errorResult("failed to get quote %d: %v", in.QuoteID, err)
 		}
 
-		data, err := json.MarshalIndent(quote, "", "  ")
+		m, err := entityToMap(quote)
+		if err != nil {
+			return errorResult("failed to convert quote: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal quote: %v", err)
 		}
@@ -251,7 +256,7 @@ func searchQuotesHandler(client *autotask.Client) func(ctx context.Context, req 
 			q.Where("name", autotask.OpContains, in.SearchTerm)
 		}
 
-		quotes, err := autotask.ListRaw(ctx, client, "Quotes", q)
+		quotes, err := autotask.List[entities.Quote](ctx, client, q)
 		if err != nil {
 			return errorResult("failed to search quotes: %v", err)
 		}
@@ -260,7 +265,12 @@ func searchQuotesHandler(client *autotask.Client) func(ctx context.Context, req 
 			return textResult("No quotes found")
 		}
 
-		data, err := json.MarshalIndent(quotes, "", "  ")
+		maps, err := entitiesToMaps(quotes)
+		if err != nil {
+			return errorResult("failed to convert quotes: %v", err)
+		}
+
+		data, err := json.MarshalIndent(maps, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal quotes: %v", err)
 		}
@@ -272,42 +282,47 @@ func searchQuotesHandler(client *autotask.Client) func(ctx context.Context, req 
 // createQuoteHandler returns a handler that creates a new quote.
 func createQuoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteInput) (*mcp.CallToolResult, any, error) {
-		payload := map[string]any{
-			"companyID": in.CompanyID,
+		entity := &entities.Quote{
+			CompanyID: autotask.Set(in.CompanyID),
 		}
 		if in.Name != "" {
-			payload["name"] = in.Name
+			entity.Name = autotask.Set(in.Name)
 		}
 		if in.Description != "" {
-			payload["description"] = in.Description
+			entity.Description = autotask.Set(in.Description)
 		}
 		if in.ContactID != 0 {
-			payload["contactID"] = in.ContactID
+			entity.ContactID = autotask.Set(in.ContactID)
 		}
 		if in.OpportunityID != 0 {
-			payload["opportunityID"] = in.OpportunityID
+			entity.OpportunityID = autotask.Set(in.OpportunityID)
 		}
 		if in.EffectiveDate != "" {
 			t, err := parseDate(in.EffectiveDate)
 			if err != nil {
 				return errorResult("invalid effectiveDate format: %v", err)
 			}
-			payload["effectiveDate"] = t.Format("2006-01-02")
+			entity.EffectiveDate = autotask.Set(t)
 		}
 		if in.ExpirationDate != "" {
 			t, err := parseDate(in.ExpirationDate)
 			if err != nil {
 				return errorResult("invalid expirationDate format: %v", err)
 			}
-			payload["expirationDate"] = t.Format("2006-01-02")
+			entity.ExpirationDate = autotask.Set(t)
 		}
 
-		created, err := autotask.CreateRaw(ctx, client, "Quotes", payload)
+		created, err := autotask.Create[entities.Quote](ctx, client, entity)
 		if err != nil {
 			return errorResult("failed to create quote: %v", err)
 		}
 
-		data, err := json.MarshalIndent(created, "", "  ")
+		m, err := entityToMap(created)
+		if err != nil {
+			return errorResult("failed to convert created quote: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal created quote: %v", err)
 		}
@@ -319,12 +334,17 @@ func createQuoteHandler(client *autotask.Client) func(ctx context.Context, req *
 // getQuoteItemHandler returns a handler that retrieves a single quote item.
 func getQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteItemInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteItemInput) (*mcp.CallToolResult, any, error) {
-		item, err := autotask.GetRaw(ctx, client, "QuoteItems", in.QuoteItemID)
+		item, err := autotask.Get[entities.QuoteItem](ctx, client, in.QuoteItemID)
 		if err != nil {
 			return errorResult("failed to get quote item %d: %v", in.QuoteItemID, err)
 		}
 
-		data, err := json.MarshalIndent(item, "", "  ")
+		m, err := entityToMap(item)
+		if err != nil {
+			return errorResult("failed to convert quote item: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal quote item: %v", err)
 		}
@@ -346,7 +366,7 @@ func searchQuoteItemsHandler(client *autotask.Client) func(ctx context.Context, 
 			q.Where("name", autotask.OpContains, in.SearchTerm)
 		}
 
-		items, err := autotask.ListRaw(ctx, client, "QuoteItems", q)
+		items, err := autotask.List[entities.QuoteItem](ctx, client, q)
 		if err != nil {
 			return errorResult("failed to search quote items: %v", err)
 		}
@@ -355,7 +375,12 @@ func searchQuoteItemsHandler(client *autotask.Client) func(ctx context.Context, 
 			return textResult("No quote items found")
 		}
 
-		data, err := json.MarshalIndent(items, "", "  ")
+		maps, err := entitiesToMaps(items)
+		if err != nil {
+			return errorResult("failed to convert quote items: %v", err)
+		}
+
+		data, err := json.MarshalIndent(maps, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal quote items: %v", err)
 		}
@@ -367,46 +392,46 @@ func searchQuoteItemsHandler(client *autotask.Client) func(ctx context.Context, 
 // createQuoteItemHandler returns a handler that creates a new quote item.
 func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteItemInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteItemInput) (*mcp.CallToolResult, any, error) {
-		payload := map[string]any{
-			"quoteID":  in.QuoteID,
-			"quantity": in.Quantity,
+		entity := &entities.QuoteItem{
+			QuoteID:  autotask.Set(in.QuoteID),
+			Quantity: autotask.Set(in.Quantity),
 		}
 
 		if in.Name != "" {
-			payload["name"] = in.Name
+			entity.Name = autotask.Set(in.Name)
 		}
 		if in.Description != "" {
-			payload["description"] = in.Description
+			entity.Description = autotask.Set(in.Description)
 		}
 		if in.UnitPrice != 0 {
-			payload["unitPrice"] = in.UnitPrice
+			entity.UnitPrice = autotask.Set(in.UnitPrice)
 		}
 		if in.UnitCost != 0 {
-			payload["unitCost"] = in.UnitCost
+			entity.UnitCost = autotask.Set(in.UnitCost)
 		}
 		if in.UnitDiscount != 0 {
-			payload["unitDiscount"] = in.UnitDiscount
+			entity.UnitDiscount = autotask.Set(in.UnitDiscount)
 		}
 		if in.LineDiscount != 0 {
-			payload["lineDiscount"] = in.LineDiscount
+			entity.LineDiscount = autotask.Set(in.LineDiscount)
 		}
 		if in.PercentageDiscount != 0 {
-			payload["percentageDiscount"] = in.PercentageDiscount
+			entity.PercentageDiscount = autotask.Set(in.PercentageDiscount)
 		}
 		if in.IsOptional != nil {
-			payload["isOptional"] = *in.IsOptional
+			entity.IsOptional = autotask.Set(*in.IsOptional)
 		}
 		if in.ProductID != 0 {
-			payload["productID"] = in.ProductID
+			entity.ProductID = autotask.Set(in.ProductID)
 		}
 		if in.ServiceID != 0 {
-			payload["serviceID"] = in.ServiceID
+			entity.ServiceID = autotask.Set(in.ServiceID)
 		}
 		if in.ServiceBundleID != 0 {
-			payload["serviceBundleID"] = in.ServiceBundleID
+			entity.ServiceBundleID = autotask.Set(in.ServiceBundleID)
 		}
 		if in.SortOrderID != 0 {
-			payload["sortOrderID"] = in.SortOrderID
+			entity.SortOrderID = autotask.Set(int64(in.SortOrderID))
 		}
 
 		// Auto-determine quoteItemType if not provided.
@@ -428,15 +453,20 @@ func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 			}
 		}
 		if itemType != 0 {
-			payload["quoteItemType"] = itemType
+			entity.QuoteItemType = autotask.Set(int64(itemType))
 		}
 
-		created, err := autotask.CreateRaw(ctx, client, "QuoteItems", payload)
+		created, err := autotask.Create[entities.QuoteItem](ctx, client, entity)
 		if err != nil {
 			return errorResult("failed to create quote item: %v", err)
 		}
 
-		data, err := json.MarshalIndent(created, "", "  ")
+		m, err := entityToMap(created)
+		if err != nil {
+			return errorResult("failed to convert created quote item: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal created quote item: %v", err)
 		}
@@ -448,38 +478,43 @@ func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 // updateQuoteItemHandler returns a handler that updates an existing quote item.
 func updateQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in UpdateQuoteItemInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in UpdateQuoteItemInput) (*mcp.CallToolResult, any, error) {
-		payload := map[string]any{
-			"id": in.QuoteItemID,
+		entity := &entities.QuoteItem{
+			ID: autotask.Set(in.QuoteItemID),
 		}
 
 		if in.Quantity != nil {
-			payload["quantity"] = *in.Quantity
+			entity.Quantity = autotask.Set(*in.Quantity)
 		}
 		if in.UnitPrice != nil {
-			payload["unitPrice"] = *in.UnitPrice
+			entity.UnitPrice = autotask.Set(*in.UnitPrice)
 		}
 		if in.UnitDiscount != nil {
-			payload["unitDiscount"] = *in.UnitDiscount
+			entity.UnitDiscount = autotask.Set(*in.UnitDiscount)
 		}
 		if in.LineDiscount != nil {
-			payload["lineDiscount"] = *in.LineDiscount
+			entity.LineDiscount = autotask.Set(*in.LineDiscount)
 		}
 		if in.PercentageDiscount != nil {
-			payload["percentageDiscount"] = *in.PercentageDiscount
+			entity.PercentageDiscount = autotask.Set(*in.PercentageDiscount)
 		}
 		if in.IsOptional != nil {
-			payload["isOptional"] = *in.IsOptional
+			entity.IsOptional = autotask.Set(*in.IsOptional)
 		}
 		if in.SortOrderID != nil {
-			payload["sortOrderID"] = *in.SortOrderID
+			entity.SortOrderID = autotask.Set(int64(*in.SortOrderID))
 		}
 
-		updated, err := autotask.UpdateRaw(ctx, client, "QuoteItems", payload)
+		updated, err := autotask.Update[entities.QuoteItem](ctx, client, entity)
 		if err != nil {
 			return errorResult("failed to update quote item %d: %v", in.QuoteItemID, err)
 		}
 
-		data, err := json.MarshalIndent(updated, "", "  ")
+		m, err := entityToMap(updated)
+		if err != nil {
+			return errorResult("failed to convert updated quote item: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal updated quote item: %v", err)
 		}
@@ -491,7 +526,7 @@ func updateQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 // deleteQuoteItemHandler returns a handler that deletes a quote item.
 func deleteQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in DeleteQuoteItemInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in DeleteQuoteItemInput) (*mcp.CallToolResult, any, error) {
-		if err := autotask.DeleteRaw(ctx, client, "QuoteItems", in.QuoteItemID); err != nil {
+		if err := autotask.Delete[entities.QuoteItem](ctx, client, in.QuoteItemID); err != nil {
 			return errorResult("failed to delete quote item %d: %v", in.QuoteItemID, err)
 		}
 
@@ -502,12 +537,17 @@ func deleteQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 // getOpportunityHandler returns a handler that retrieves a single opportunity.
 func getOpportunityHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetOpportunityInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in GetOpportunityInput) (*mcp.CallToolResult, any, error) {
-		opp, err := autotask.GetRaw(ctx, client, "Opportunities", in.OpportunityID)
+		opp, err := autotask.Get[entities.Opportunity](ctx, client, in.OpportunityID)
 		if err != nil {
 			return errorResult("failed to get opportunity %d: %v", in.OpportunityID, err)
 		}
 
-		data, err := json.MarshalIndent(opp, "", "  ")
+		m, err := entityToMap(opp)
+		if err != nil {
+			return errorResult("failed to convert opportunity: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal opportunity: %v", err)
 		}
@@ -532,7 +572,7 @@ func searchOpportunitiesHandler(client *autotask.Client) func(ctx context.Contex
 			q.Where("status", autotask.OpEq, in.Status)
 		}
 
-		opps, err := autotask.ListRaw(ctx, client, "Opportunities", q)
+		opps, err := autotask.List[entities.Opportunity](ctx, client, q)
 		if err != nil {
 			return errorResult("failed to search opportunities: %v", err)
 		}
@@ -541,7 +581,12 @@ func searchOpportunitiesHandler(client *autotask.Client) func(ctx context.Contex
 			return textResult("No opportunities found")
 		}
 
-		data, err := json.MarshalIndent(opps, "", "  ")
+		maps, err := entitiesToMaps(opps)
+		if err != nil {
+			return errorResult("failed to convert opportunities: %v", err)
+		}
+
+		data, err := json.MarshalIndent(maps, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal opportunities: %v", err)
 		}
@@ -562,47 +607,52 @@ func createOpportunityHandler(client *autotask.Client) func(ctx context.Context,
 			return errorResult("invalid startDate format: %v", err)
 		}
 
-		payload := map[string]any{
-			"title":               in.Title,
-			"companyID":           in.CompanyID,
-			"ownerResourceID":     in.OwnerResourceID,
-			"status":              in.Status,
-			"stage":               in.Stage,
-			"projectedCloseDate":  projectedClose.Format("2006-01-02"),
-			"startDate":           startDate.Format("2006-01-02"),
+		entity := &entities.Opportunity{
+			Title:              autotask.Set(in.Title),
+			CompanyID:          autotask.Set(in.CompanyID),
+			OwnerResourceID:    autotask.Set(in.OwnerResourceID),
+			Status:             autotask.Set(int64(in.Status)),
+			Stage:              autotask.Set(int64(in.Stage)),
+			ProjectedCloseDate: autotask.Set(projectedClose),
+			StartDate:          autotask.Set(startDate),
 		}
 
 		if in.Probability != 0 {
-			payload["probability"] = in.Probability
+			entity.Probability = autotask.Set(int64(in.Probability))
 		}
 		if in.Amount != 0 {
-			payload["amount"] = in.Amount
+			entity.Amount = autotask.Set(in.Amount)
 		}
 		if in.Cost != 0 {
-			payload["cost"] = in.Cost
+			entity.Cost = autotask.Set(in.Cost)
 		}
 		if in.UseQuoteTotals {
-			payload["useQuoteTotals"] = in.UseQuoteTotals
+			entity.UseQuoteTotals = autotask.Set(in.UseQuoteTotals)
 		}
 		if in.TotalAmountMonths != 0 {
-			payload["totalAmountMonths"] = in.TotalAmountMonths
+			entity.TotalAmountMonths = autotask.Set(int64(in.TotalAmountMonths))
 		}
 		if in.ContactID != 0 {
-			payload["contactID"] = in.ContactID
+			entity.ContactID = autotask.Set(in.ContactID)
 		}
 		if in.Description != "" {
-			payload["description"] = in.Description
+			entity.Description = autotask.Set(in.Description)
 		}
 		if in.OpportunityCategoryID != 0 {
-			payload["opportunityCategoryID"] = in.OpportunityCategoryID
+			entity.OpportunityCategoryID = autotask.Set(int64(in.OpportunityCategoryID))
 		}
 
-		created, err := autotask.CreateRaw(ctx, client, "Opportunities", payload)
+		created, err := autotask.Create[entities.Opportunity](ctx, client, entity)
 		if err != nil {
 			return errorResult("failed to create opportunity: %v", err)
 		}
 
-		data, err := json.MarshalIndent(created, "", "  ")
+		m, err := entityToMap(created)
+		if err != nil {
+			return errorResult("failed to convert created opportunity: %v", err)
+		}
+
+		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal created opportunity: %v", err)
 		}
@@ -627,7 +677,7 @@ func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, re
 			q.Where("isVoided", autotask.OpEq, *in.IsVoided)
 		}
 
-		invoices, err := autotask.ListRaw(ctx, client, "Invoices", q)
+		invoices, err := autotask.List[entities.Invoice](ctx, client, q)
 		if err != nil {
 			return errorResult("failed to search invoices: %v", err)
 		}
@@ -636,7 +686,12 @@ func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, re
 			return textResult("No invoices found")
 		}
 
-		data, err := json.MarshalIndent(invoices, "", "  ")
+		maps, err := entitiesToMaps(invoices)
+		if err != nil {
+			return errorResult("failed to convert invoices: %v", err)
+		}
+
+		data, err := json.MarshalIndent(maps, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal invoices: %v", err)
 		}
