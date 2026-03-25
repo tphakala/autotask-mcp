@@ -59,6 +59,9 @@ func RegisterBillingTools(s *mcp.Server, client *autotask.Client, mapper *servic
 // getBillingItemHandler returns a handler that retrieves a single billing item.
 func getBillingItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetBillingItemInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in GetBillingItemInput) (*mcp.CallToolResult, any, error) {
+		if in.BillingItemID == 0 {
+			return errorResult("billingItemId is required")
+		}
 		item, err := autotask.GetRaw(ctx, client, "BillingItems", in.BillingItemID)
 		if err != nil {
 			return errorResult("failed to get billing item %d: %v", in.BillingItemID, err)
