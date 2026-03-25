@@ -38,7 +38,7 @@ func RegisterAll(s *mcp.Server, client *autotask.Client) {
 	s.AddResource(&mcp.Resource{
 		URI:         "autotask://tickets",
 		Name:        "tickets",
-		Description: "List open tickets in Autotask (up to 50)",
+		Description: "List non-completed tickets in Autotask (up to 50)",
 		MIMEType:    mimeTypeJSON,
 	}, listTicketsHandler(client))
 
@@ -79,7 +79,14 @@ func parseIDFromURI(uri string) (int64, error) {
 	if idx < 0 || idx == len(uri)-1 {
 		return 0, fmt.Errorf("no ID found in URI %q", uri)
 	}
-	return strconv.ParseInt(uri[idx+1:], 10, 64)
+	id, err := strconv.ParseInt(uri[idx+1:], 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	if id <= 0 {
+		return 0, fmt.Errorf("invalid non-positive ID %d in URI %q", id, uri)
+	}
+	return id, nil
 }
 
 // jsonResult wraps any value as a JSON ResourceContents.

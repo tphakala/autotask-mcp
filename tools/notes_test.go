@@ -61,7 +61,7 @@ func TestGetTicketNoteHandler_NotFound(t *testing.T) {
 	handler := getTicketNoteHandler(client)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetTicketNoteInput{TicketID: 3001, NoteID: 99999})
+	result, _, err := handler(ctx, nil, GetTicketNoteInput{NoteID: 99999})
 	if err != nil {
 		t.Fatalf("unexpected protocol error: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestGetTicketNoteHandler_Success(t *testing.T) {
 	handler := getTicketNoteHandler(client)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetTicketNoteInput{TicketID: 3001, NoteID: noteID})
+	result, _, err := handler(ctx, nil, GetTicketNoteInput{NoteID: noteID})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestGetProjectNoteHandler_NotFound(t *testing.T) {
 	handler := getProjectNoteHandler(client)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetProjectNoteInput{ProjectID: 4001, NoteID: 99999})
+	result, _, err := handler(ctx, nil, GetProjectNoteInput{NoteID: 99999})
 	if err != nil {
 		t.Fatalf("unexpected protocol error: %v", err)
 	}

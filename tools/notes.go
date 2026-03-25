@@ -11,8 +11,7 @@ import (
 
 // GetTicketNoteInput defines the input parameters for getting a single ticket note.
 type GetTicketNoteInput struct {
-	TicketID int64 `json:"ticketId" jsonschema:"Ticket ID that owns the note"`
-	NoteID   int64 `json:"noteId" jsonschema:"Note ID to retrieve"`
+	NoteID int64 `json:"noteId" jsonschema:"Note ID to retrieve"`
 }
 
 // SearchTicketNotesInput defines the input parameters for searching ticket notes.
@@ -31,8 +30,7 @@ type CreateTicketNoteInput struct {
 
 // GetProjectNoteInput defines the input parameters for getting a single project note.
 type GetProjectNoteInput struct {
-	ProjectID int64 `json:"projectId" jsonschema:"Project ID that owns the note"`
-	NoteID    int64 `json:"noteId" jsonschema:"Note ID to retrieve"`
+	NoteID int64 `json:"noteId" jsonschema:"Note ID to retrieve"`
 }
 
 // SearchProjectNotesInput defines the input parameters for searching project notes.
@@ -50,8 +48,7 @@ type CreateProjectNoteInput struct {
 
 // GetCompanyNoteInput defines the input parameters for getting a single company note.
 type GetCompanyNoteInput struct {
-	CompanyID int64 `json:"companyId" jsonschema:"Company ID that owns the note"`
-	NoteID    int64 `json:"noteId" jsonschema:"Note ID to retrieve"`
+	NoteID int64 `json:"noteId" jsonschema:"Note ID to retrieve"`
 }
 
 // SearchCompanyNotesInput defines the input parameters for searching company notes.
@@ -161,6 +158,9 @@ func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context,
 // createTicketNoteHandler returns a handler that creates a new note on a ticket.
 func createTicketNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketNoteInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketNoteInput) (*mcp.CallToolResult, any, error) {
+		if in.Description == "" {
+			return errorResult("description is required")
+		}
 		note := &entities.TicketNote{
 			Description: autotask.Set(in.Description),
 		}
@@ -235,6 +235,9 @@ func searchProjectNotesHandler(client *autotask.Client) func(ctx context.Context
 // createProjectNoteHandler returns a handler that creates a new note on a project.
 func createProjectNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectNoteInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectNoteInput) (*mcp.CallToolResult, any, error) {
+		if in.Description == "" {
+			return errorResult("description is required")
+		}
 		data := map[string]any{
 			"description": in.Description,
 		}
@@ -300,6 +303,9 @@ func searchCompanyNotesHandler(client *autotask.Client) func(ctx context.Context
 // createCompanyNoteHandler returns a handler that creates a new note on a company.
 func createCompanyNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyNoteInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyNoteInput) (*mcp.CallToolResult, any, error) {
+		if in.Description == "" {
+			return errorResult("description is required")
+		}
 		data := map[string]any{
 			"description": in.Description,
 		}
