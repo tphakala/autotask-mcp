@@ -52,12 +52,20 @@ func (m *MappingCache) GetCompanyName(ctx context.Context, id int64) string {
 	// Fallback to API
 	raw, err := autotask.GetRaw(ctx, m.client, "Companies", id)
 	if err != nil {
-		return fmt.Sprintf("Unknown (%d)", id)
+		unknown := fmt.Sprintf("Unknown (%d)", id)
+		m.mu.Lock()
+		m.companies[id] = cacheEntry{name: unknown, expiry: time.Now().Add(mappingTTL)}
+		m.mu.Unlock()
+		return unknown
 	}
 
 	name, _ := raw["companyName"].(string)
 	if name == "" {
-		return fmt.Sprintf("Unknown (%d)", id)
+		unknown := fmt.Sprintf("Unknown (%d)", id)
+		m.mu.Lock()
+		m.companies[id] = cacheEntry{name: unknown, expiry: time.Now().Add(mappingTTL)}
+		m.mu.Unlock()
+		return unknown
 	}
 
 	// Write to cache with per-entry TTL
@@ -86,14 +94,22 @@ func (m *MappingCache) GetResourceName(ctx context.Context, id int64) string {
 	// Fallback to API
 	raw, err := autotask.GetRaw(ctx, m.client, "Resources", id)
 	if err != nil {
-		return fmt.Sprintf("Unknown (%d)", id)
+		unknown := fmt.Sprintf("Unknown (%d)", id)
+		m.mu.Lock()
+		m.resources[id] = cacheEntry{name: unknown, expiry: time.Now().Add(mappingTTL)}
+		m.mu.Unlock()
+		return unknown
 	}
 
 	firstName, _ := raw["firstName"].(string)
 	lastName, _ := raw["lastName"].(string)
 	name := strings.TrimSpace(firstName + " " + lastName)
 	if name == "" {
-		return fmt.Sprintf("Unknown (%d)", id)
+		unknown := fmt.Sprintf("Unknown (%d)", id)
+		m.mu.Lock()
+		m.resources[id] = cacheEntry{name: unknown, expiry: time.Now().Add(mappingTTL)}
+		m.mu.Unlock()
+		return unknown
 	}
 
 	// Write to cache with per-entry TTL
