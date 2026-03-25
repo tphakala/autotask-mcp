@@ -34,14 +34,26 @@ func NewMappingCache(client *autotask.Client) *MappingCache {
 	}
 }
 
+// cacheAndReturn stores a name in the given cache map and returns it.
+func (m *MappingCache) cacheAndReturn(cache map[int64]cacheEntry, id int64, name string) string {
+	m.mu.Lock()
+	cache[id] = cacheEntry{name: name, expiry: time.Now().Add(mappingTTL)}
+	m.mu.Unlock()
+	return name
+}
+
+// unknownName returns a formatted "Unknown (ID)" string for unresolvable IDs.
+func unknownName(id int64) string {
+	return fmt.Sprintf("Unknown (%d)", id)
+}
+
 // GetCompanyName returns the company name for the given ID.
-// Returns "" for id == 0. Returns "Unknown (ID)" on error.
+// Returns "" for id == 0. Caches negative results to prevent repeated API calls.
 func (m *MappingCache) GetCompanyName(ctx context.Context, id int64) string {
 	if id == 0 {
 		return ""
 	}
 
-	// Check cache first
 	m.mu.RLock()
 	if entry, ok := m.companies[id]; ok && time.Now().Before(entry.expiry) {
 		m.mu.RUnlock()
@@ -49,33 +61,26 @@ func (m *MappingCache) GetCompanyName(ctx context.Context, id int64) string {
 	}
 	m.mu.RUnlock()
 
-	// Fallback to API
 	raw, err := autotask.GetRaw(ctx, m.client, "Companies", id)
 	if err != nil {
-		return fmt.Sprintf("Unknown (%d)", id)
+		return m.cacheAndReturn(m.companies, id, unknownName(id))
 	}
 
 	name, _ := raw["companyName"].(string)
 	if name == "" {
-		return fmt.Sprintf("Unknown (%d)", id)
+		return m.cacheAndReturn(m.companies, id, unknownName(id))
 	}
 
-	// Write to cache with per-entry TTL
-	m.mu.Lock()
-	m.companies[id] = cacheEntry{name: name, expiry: time.Now().Add(mappingTTL)}
-	m.mu.Unlock()
-
-	return name
+	return m.cacheAndReturn(m.companies, id, name)
 }
 
 // GetResourceName returns the full name (firstName + lastName) for the given resource ID.
-// Returns "" for id == 0. Returns "Unknown (ID)" on error.
+// Returns "" for id == 0. Caches negative results to prevent repeated API calls.
 func (m *MappingCache) GetResourceName(ctx context.Context, id int64) string {
 	if id == 0 {
 		return ""
 	}
 
-	// Check cache first
 	m.mu.RLock()
 	if entry, ok := m.resources[id]; ok && time.Now().Before(entry.expiry) {
 		m.mu.RUnlock()
@@ -83,31 +88,24 @@ func (m *MappingCache) GetResourceName(ctx context.Context, id int64) string {
 	}
 	m.mu.RUnlock()
 
-	// Fallback to API
 	raw, err := autotask.GetRaw(ctx, m.client, "Resources", id)
 	if err != nil {
-		return fmt.Sprintf("Unknown (%d)", id)
+		return m.cacheAndReturn(m.resources, id, unknownName(id))
 	}
 
 	firstName, _ := raw["firstName"].(string)
 	lastName, _ := raw["lastName"].(string)
 	name := strings.TrimSpace(firstName + " " + lastName)
 	if name == "" {
-		return fmt.Sprintf("Unknown (%d)", id)
+		return m.cacheAndReturn(m.resources, id, unknownName(id))
 	}
 
-	// Write to cache with per-entry TTL
-	m.mu.Lock()
-	m.resources[id] = cacheEntry{name: name, expiry: time.Now().Add(mappingTTL)}
-	m.mu.Unlock()
-
-	return name
+	return m.cacheAndReturn(m.resources, id, name)
 }
 
 // EnhanceItems adds an "_enhanced" map with human-readable names to each item.
 // It batch-preloads uncached company/resource names before enhancing to minimize API calls.
 func (m *MappingCache) EnhanceItems(ctx context.Context, items []map[string]any) {
-	// Collect unique IDs that need lookup.
 	companyIDs := make(map[int64]bool)
 	resourceIDs := make(map[int64]bool)
 	for _, item := range items {
@@ -121,11 +119,9 @@ func (m *MappingCache) EnhanceItems(ctx context.Context, items []map[string]any)
 		}
 	}
 
-	// Batch preload uncached entries.
 	m.preloadCompanies(ctx, companyIDs)
 	m.preloadResources(ctx, resourceIDs)
 
-	// Now enhance using cached values (all lookups are cache hits).
 	for _, item := range items {
 		enhanced := make(map[string]any)
 

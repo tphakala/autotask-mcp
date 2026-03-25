@@ -279,8 +279,12 @@ func executeToolHandler() func(ctx context.Context, req *mcp.CallToolRequest, in
 
 		var argHint string
 		if len(in.Arguments) > 0 {
-			data, _ := json.Marshal(in.Arguments)
-			argHint = string(data)
+			data, err := json.Marshal(in.Arguments)
+			if err != nil {
+				argHint = "{}"
+			} else {
+				argHint = string(data)
+			}
 		} else {
 			argHint = "{}"
 		}

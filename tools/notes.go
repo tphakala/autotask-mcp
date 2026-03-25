@@ -248,22 +248,26 @@ func createProjectNoteHandler(client *autotask.Client) func(ctx context.Context,
 		if in.Description == "" {
 			return errorResult("description is required")
 		}
-		data := map[string]any{
-			"description": in.Description,
+		note := &entities.ProjectNote{
+			Description: autotask.Set(in.Description),
 		}
 		if in.Title != "" {
-			data["title"] = in.Title
+			note.Title = autotask.Set(in.Title)
 		}
 		if in.NoteType != 0 {
-			data["noteType"] = in.NoteType
+			note.NoteType = autotask.Set(int64(in.NoteType))
 		}
 
-		created, err := autotask.CreateChildRaw(ctx, client, "Projects", in.ProjectID, "ProjectNotes", data)
+		created, err := autotask.CreateChild[entities.Project, entities.ProjectNote](ctx, client, in.ProjectID, note)
 		if err != nil {
 			return errorResult("failed to create project note: %v", err)
 		}
 
-		out, err := json.MarshalIndent(created, "", "  ")
+		m, err := entityToMap(created)
+		if err != nil {
+			return errorResult("failed to convert created project note: %v", err)
+		}
+		out, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal created project note: %v", err)
 		}
@@ -321,22 +325,29 @@ func createCompanyNoteHandler(client *autotask.Client) func(ctx context.Context,
 		if in.Description == "" {
 			return errorResult("description is required")
 		}
-		data := map[string]any{
-			"description": in.Description,
+		// CompanyNote uses different field names than TicketNote/ProjectNote:
+		// Input.Description → entity.Note (body text)
+		// Input.Title → entity.Name (display name)
+		note := &entities.CompanyNote{
+			Note: autotask.Set(in.Description),
 		}
 		if in.Title != "" {
-			data["title"] = in.Title
+			note.Name = autotask.Set(in.Title)
 		}
 		if in.ActionType != 0 {
-			data["actionType"] = in.ActionType
+			note.ActionType = autotask.Set(int64(in.ActionType))
 		}
 
-		created, err := autotask.CreateChildRaw(ctx, client, "Companies", in.CompanyID, "CompanyNotes", data)
+		created, err := autotask.CreateChild[entities.Company, entities.CompanyNote](ctx, client, in.CompanyID, note)
 		if err != nil {
 			return errorResult("failed to create company note: %v", err)
 		}
 
-		out, err := json.MarshalIndent(created, "", "  ")
+		m, err := entityToMap(created)
+		if err != nil {
+			return errorResult("failed to convert created company note: %v", err)
+		}
+		out, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal created company note: %v", err)
 		}
