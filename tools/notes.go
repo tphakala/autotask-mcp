@@ -325,6 +325,9 @@ func createCompanyNoteHandler(client *autotask.Client) func(ctx context.Context,
 		if in.Description == "" {
 			return errorResult("description is required")
 		}
+		// CompanyNote uses different field names than TicketNote/ProjectNote:
+		// Input.Description → entity.Note (body text)
+		// Input.Title → entity.Name (display name)
 		note := &entities.CompanyNote{
 			Note: autotask.Set(in.Description),
 		}
