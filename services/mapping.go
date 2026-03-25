@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,21 +12,25 @@ import (
 
 const mappingTTL = 30 * time.Minute
 
-// MappingCache caches company and resource ID-to-name lookups with a 30-minute TTL.
+type cacheEntry struct {
+	name   string
+	expiry time.Time
+}
+
+// MappingCache caches company and resource ID-to-name lookups with per-entry 30-minute TTL.
 type MappingCache struct {
 	client    *autotask.Client
 	mu        sync.RWMutex
-	companies map[int64]string
-	resources map[int64]string
-	expiry    time.Time
+	companies map[int64]cacheEntry
+	resources map[int64]cacheEntry
 }
 
 // NewMappingCache creates a new MappingCache using the provided Autotask client.
 func NewMappingCache(client *autotask.Client) *MappingCache {
 	return &MappingCache{
 		client:    client,
-		companies: make(map[int64]string),
-		resources: make(map[int64]string),
+		companies: make(map[int64]cacheEntry),
+		resources: make(map[int64]cacheEntry),
 	}
 }
 
@@ -38,11 +43,9 @@ func (m *MappingCache) GetCompanyName(ctx context.Context, id int64) string {
 
 	// Check cache first
 	m.mu.RLock()
-	if time.Now().Before(m.expiry) {
-		if name, ok := m.companies[id]; ok {
-			m.mu.RUnlock()
-			return name
-		}
+	if entry, ok := m.companies[id]; ok && time.Now().Before(entry.expiry) {
+		m.mu.RUnlock()
+		return entry.name
 	}
 	m.mu.RUnlock()
 
@@ -57,10 +60,9 @@ func (m *MappingCache) GetCompanyName(ctx context.Context, id int64) string {
 		return fmt.Sprintf("Unknown (%d)", id)
 	}
 
-	// Write to cache
+	// Write to cache with per-entry TTL
 	m.mu.Lock()
-	m.companies[id] = name
-	m.expiry = time.Now().Add(mappingTTL)
+	m.companies[id] = cacheEntry{name: name, expiry: time.Now().Add(mappingTTL)}
 	m.mu.Unlock()
 
 	return name
@@ -75,11 +77,9 @@ func (m *MappingCache) GetResourceName(ctx context.Context, id int64) string {
 
 	// Check cache first
 	m.mu.RLock()
-	if time.Now().Before(m.expiry) {
-		if name, ok := m.resources[id]; ok {
-			m.mu.RUnlock()
-			return name
-		}
+	if entry, ok := m.resources[id]; ok && time.Now().Before(entry.expiry) {
+		m.mu.RUnlock()
+		return entry.name
 	}
 	m.mu.RUnlock()
 
@@ -91,16 +91,14 @@ func (m *MappingCache) GetResourceName(ctx context.Context, id int64) string {
 
 	firstName, _ := raw["firstName"].(string)
 	lastName, _ := raw["lastName"].(string)
-	name := firstName + " " + lastName
-	name = trimSpace(name)
+	name := strings.TrimSpace(firstName + " " + lastName)
 	if name == "" {
 		return fmt.Sprintf("Unknown (%d)", id)
 	}
 
-	// Write to cache
+	// Write to cache with per-entry TTL
 	m.mu.Lock()
-	m.resources[id] = name
-	m.expiry = time.Now().Add(mappingTTL)
+	m.resources[id] = cacheEntry{name: name, expiry: time.Now().Add(mappingTTL)}
 	m.mu.Unlock()
 
 	return name
@@ -142,17 +140,4 @@ func toInt64(v any) (int64, bool) {
 		return int64(n), true
 	}
 	return 0, false
-}
-
-// trimSpace trims leading/trailing whitespace from a string.
-func trimSpace(s string) string {
-	start := 0
-	for start < len(s) && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
-		start++
-	}
-	end := len(s)
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
-		end--
-	}
-	return s[start:end]
 }

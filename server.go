@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	autotask "github.com/tphakala/go-autotask"
@@ -176,8 +177,11 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 	addr := fmt.Sprintf("%s:%d", cfg.HTTPHost, cfg.HTTPPort)
 	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Graceful shutdown: watch for context cancellation.

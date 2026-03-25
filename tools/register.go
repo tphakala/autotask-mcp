@@ -48,6 +48,9 @@ func entityToMap(entity any) (map[string]any, error) {
 func entitiesToMaps[T any](entities []*T) ([]map[string]any, error) {
 	maps := make([]map[string]any, 0, len(entities))
 	for _, e := range entities {
+		if e == nil {
+			continue
+		}
 		m, err := entityToMap(e)
 		if err != nil {
 			return nil, err
@@ -76,7 +79,9 @@ func errorResult(format string, args ...any) (*mcp.CallToolResult, any, error) {
 
 // searchResult builds a compact formatted search result with enhancement.
 func searchResult(ctx context.Context, mapper *services.MappingCache, items []map[string]any, toolName string, page, pageSize int) (*mcp.CallToolResult, any, error) {
-	mapper.EnhanceItems(ctx, items)
+	if mapper != nil {
+		mapper.EnhanceItems(ctx, items)
+	}
 
 	entityType := services.DetectEntityType(toolName)
 	opts := services.FormatOptions{Page: page, PageSize: pageSize}

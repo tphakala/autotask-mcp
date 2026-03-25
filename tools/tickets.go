@@ -151,7 +151,9 @@ func getTicketDetailsHandler(client *autotask.Client, mapper *services.MappingCa
 			return errorResult("failed to convert ticket: %v", err)
 		}
 
-		mapper.EnhanceItems(ctx, []map[string]any{m})
+		if mapper != nil {
+			mapper.EnhanceItems(ctx, []map[string]any{m})
+		}
 
 		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {

@@ -132,8 +132,8 @@ var routingRules = []struct {
 	tool        string
 	description string
 }{
-	{[]string{"ticket", "issue", "problem", "request"}, "autotask_search_tickets", "Search for tickets"},
 	{[]string{"create ticket", "new ticket", "open ticket"}, "autotask_create_ticket", "Create a new ticket"},
+	{[]string{"ticket", "issue", "problem", "request"}, "autotask_search_tickets", "Search for tickets"},
 	{[]string{"company", "companies", "account", "client", "customer"}, "autotask_search_companies", "Search for companies"},
 	{[]string{"contact", "contacts", "person", "user"}, "autotask_search_contacts", "Search for contacts"},
 	{[]string{"time", "hours", "timesheet"}, "autotask_search_time_entries", "Search time entries"},
@@ -221,6 +221,7 @@ func listCategoriesHandler() func(ctx context.Context, req *mcp.CallToolRequest,
 // listCategoryToolsHandler returns a handler that lists tools for a given category.
 func listCategoryToolsHandler() func(ctx context.Context, req *mcp.CallToolRequest, in ListCategoryToolsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in ListCategoryToolsInput) (*mcp.CallToolResult, any, error) {
+		categoryName := in.Category
 		cat, ok := ToolCategories[in.Category]
 		if !ok {
 			// Try case-insensitive match.
@@ -228,6 +229,7 @@ func listCategoryToolsHandler() func(ctx context.Context, req *mcp.CallToolReque
 			for k, v := range ToolCategories {
 				if strings.ToLower(k) == lower {
 					cat = v
+					categoryName = k
 					ok = true
 					break
 				}
@@ -251,7 +253,7 @@ func listCategoryToolsHandler() func(ctx context.Context, req *mcp.CallToolReque
 		}
 
 		result := map[string]any{
-			"category":    in.Category,
+			"category":    categoryName,
 			"description": cat.Description,
 			"tools":       tools,
 		}

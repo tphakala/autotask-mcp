@@ -108,6 +108,9 @@ func DetectEntityType(toolName string) string {
 // pickSummaryFields returns a new map containing only the summary fields for the
 // entity type. Enhancement fields from the "_enhanced" sub-map are inlined.
 func pickSummaryFields(item map[string]any, entityType string) map[string]any {
+	if item == nil {
+		return make(map[string]any)
+	}
 	fields, ok := SummaryFields[entityType]
 	result := make(map[string]any)
 
