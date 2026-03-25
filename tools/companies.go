@@ -99,7 +99,7 @@ func createCompanyHandler(client *autotask.Client) func(ctx context.Context, req
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyInput) (*mcp.CallToolResult, any, error) {
 		company := &entities.Company{
 			CompanyName: autotask.Set(in.CompanyName),
-			CompanyType: autotask.Set(in.CompanyType),
+			CompanyType: autotask.Set(int64(in.CompanyType)),
 		}
 
 		if in.Phone != "" {

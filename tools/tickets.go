@@ -173,10 +173,10 @@ func createTicketHandler(client *autotask.Client) func(ctx context.Context, req 
 		}
 
 		if in.Status != 0 {
-			ticket.Status = autotask.Set(in.Status)
+			ticket.Status = autotask.Set(int64(in.Status))
 		}
 		if in.Priority != 0 {
-			ticket.Priority = autotask.Set(in.Priority)
+			ticket.Priority = autotask.Set(int64(in.Priority))
 		}
 		if in.AssignedResourceID != 0 {
 			ticket.AssignedResourceID = autotask.Set(in.AssignedResourceID)
@@ -221,10 +221,10 @@ func updateTicketHandler(client *autotask.Client) func(ctx context.Context, req 
 			ticket.Description = autotask.Set(in.Description)
 		}
 		if in.Status != 0 {
-			ticket.Status = autotask.Set(in.Status)
+			ticket.Status = autotask.Set(int64(in.Status))
 		}
 		if in.Priority != 0 {
-			ticket.Priority = autotask.Set(in.Priority)
+			ticket.Priority = autotask.Set(int64(in.Priority))
 		}
 		if in.AssignedResourceID != 0 {
 			ticket.AssignedResourceID = autotask.Set(in.AssignedResourceID)

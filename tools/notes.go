@@ -174,10 +174,10 @@ func createTicketNoteHandler(client *autotask.Client) func(ctx context.Context, 
 			note.Title = autotask.Set(in.Title)
 		}
 		if in.NoteType != 0 {
-			note.NoteType = autotask.Set(in.NoteType)
+			note.NoteType = autotask.Set(int64(in.NoteType))
 		}
 		if in.Publish != 0 {
-			note.Publish = autotask.Set(in.Publish)
+			note.Publish = autotask.Set(int64(in.Publish))
 		}
 
 		created, err := autotask.CreateChild[entities.Ticket, entities.TicketNote](ctx, client, in.TicketID, note)

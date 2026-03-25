@@ -85,7 +85,7 @@ func createProjectHandler(client *autotask.Client) func(ctx context.Context, req
 		project := &entities.Project{
 			CompanyID:   autotask.Set(in.CompanyID),
 			ProjectName: autotask.Set(in.ProjectName),
-			Status:      autotask.Set(in.Status),
+			Status:      autotask.Set(int64(in.Status)),
 		}
 
 		if in.Description != "" {

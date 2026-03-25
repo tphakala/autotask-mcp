@@ -90,7 +90,7 @@ func createTaskHandler(client *autotask.Client) func(ctx context.Context, req *m
 		task := &entities.Task{
 			ProjectID: autotask.Set(in.ProjectID),
 			Title:     autotask.Set(in.Title),
-			Status:    autotask.Set(in.Status),
+			Status:    autotask.Set(int64(in.Status)),
 		}
 
 		if in.Description != "" {
