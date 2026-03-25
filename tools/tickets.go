@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	autotask "github.com/tphakala/go-autotask"
@@ -234,9 +233,9 @@ func updateTicketHandler(client *autotask.Client) func(ctx context.Context, req 
 			ticket.AssignedResourceRoleID = autotask.Set(in.AssignedResourceRoleID)
 		}
 		if in.DueDateTime != "" {
-			t, err := time.Parse(time.RFC3339, in.DueDateTime)
+			t, err := parseDate(in.DueDateTime)
 			if err != nil {
-				return errorResult("invalid dueDateTime format (expected ISO 8601 / RFC3339): %v", err)
+				return errorResult("invalid dueDateTime format (expected YYYY-MM-DD or RFC3339): %v", err)
 			}
 			ticket.DueDateTime = autotask.Set(t)
 		}

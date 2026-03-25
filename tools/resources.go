@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	autotask "github.com/tphakala/go-autotask"
@@ -61,11 +60,6 @@ func searchResourcesHandler(client *autotask.Client) func(ctx context.Context, r
 			return errorResult("failed to convert resources: %v", err)
 		}
 
-		data, err := json.Marshal(maps)
-		if err != nil {
-			return errorResult("failed to marshal resources: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return searchResult(ctx, nil, maps, "autotask_search_resources", defaultPage(in.Page), pageSize)
 	}
 }

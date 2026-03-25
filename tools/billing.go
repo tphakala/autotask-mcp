@@ -118,6 +118,7 @@ func searchBillingItemsHandler(client *autotask.Client, mapper *services.Mapping
 // searchBillingItemApprovalLevelsHandler returns a handler that searches billing item approval levels.
 func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, any, error) {
+		page := defaultPage(in.Page)
 		pageSize := defaultPageSize(in.PageSize, 25, 500)
 		q := autotask.NewQuery().Limit(pageSize)
 
@@ -146,11 +147,6 @@ func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx co
 			return textResult("No billing item approval levels found")
 		}
 
-		data, err := json.MarshalIndent(levels, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal billing item approval levels: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return searchResult(ctx, nil, levels, "autotask_search_billing_item_approval_levels", page, pageSize)
 	}
 }

@@ -75,12 +75,13 @@ func TestSearchResourcesHandler_ReturnsResources(t *testing.T) {
 		t.Fatalf("expected TextContent, got %T", result.Content[0])
 	}
 
-	// Result should be a JSON array.
-	var items []any
-	if err := json.Unmarshal([]byte(text.Text), &items); err != nil {
-		t.Fatalf("result is not valid JSON array: %v\ncontent: %s", err, text.Text)
+	// Result should be a compact JSON response with summary + items.
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(text.Text), &resp); err != nil {
+		t.Fatalf("result is not valid JSON: %v\ncontent: %s", err, text.Text)
 	}
-	if len(items) == 0 {
+	items, ok := resp["items"].([]any)
+	if !ok || len(items) == 0 {
 		t.Error("expected at least one resource in results")
 	}
 }

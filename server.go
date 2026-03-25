@@ -184,10 +184,12 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// Graceful shutdown: watch for context cancellation.
+	// Graceful shutdown: drain active connections before closing.
 	go func() {
 		<-ctx.Done()
-		_ = httpServer.Close()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(shutdownCtx)
 	}()
 
 	logger.Info("autotask-mcp HTTP server listening", "addr", addr, "authMode", cfg.AuthMode)
