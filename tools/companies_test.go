@@ -161,6 +161,9 @@ func TestUpdateCompanyHandler_Success(t *testing.T) {
 	if result.IsError {
 		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
 	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected content in result")
+	}
 
 	text, ok := result.Content[0].(*mcp.TextContent)
 	if !ok {

@@ -46,6 +46,9 @@ func TestListQueuesHandler_ReturnsResult(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
+	if result.IsError {
+		t.Error("expected IsError=false")
+	}
 }
 
 // TestListTicketStatusesHandler_ReturnsResult tests that the handler returns a result.
@@ -71,6 +74,9 @@ func TestListTicketStatusesHandler_ReturnsResult(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
+	if result.IsError {
+		t.Error("expected IsError=false")
+	}
 }
 
 // TestListTicketPrioritiesHandler_ReturnsResult tests that the handler returns a result.
@@ -95,6 +101,9 @@ func TestListTicketPrioritiesHandler_ReturnsResult(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result")
+	}
+	if result.IsError {
+		t.Error("expected IsError=false")
 	}
 }
 

@@ -49,6 +49,9 @@ func TestSearchBillingItemsHandler_NoResults(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
+	if result.IsError {
+		t.Error("expected IsError=false for no-results case")
+	}
 }
 
 // TestSearchBillingItemApprovalLevelsHandler_NoResults tests the empty-result case.
@@ -63,5 +66,8 @@ func TestSearchBillingItemApprovalLevelsHandler_NoResults(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result")
+	}
+	if result.IsError {
+		t.Error("expected IsError=false for no-results case")
 	}
 }

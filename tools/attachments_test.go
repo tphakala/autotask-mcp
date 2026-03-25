@@ -46,4 +46,6 @@ func TestSearchTicketAttachmentsHandler_NoPanic(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
+	// Note: IsError may be true when mock server has no ticket store for the parent ID.
+	// The key assertion is that the handler doesn't panic and returns a valid result.
 }
