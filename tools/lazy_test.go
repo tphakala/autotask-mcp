@@ -211,6 +211,46 @@ func TestRouter_EmptyIntent(t *testing.T) {
 	}
 }
 
+// TestToolCategories_AllToolsHaveDescriptions ensures every tool listed in
+// ToolCategories has a corresponding entry in toolDescriptions, and vice versa.
+// This prevents drift when tools are added to RegisterAll but not to lazy.go.
+func TestToolCategories_AllToolsHaveDescriptions(t *testing.T) {
+	// Collect all tool names from ToolCategories.
+	categoryTools := map[string]bool{}
+	for _, cat := range ToolCategories {
+		for _, tool := range cat.Tools {
+			categoryTools[tool] = true
+		}
+	}
+
+	// Every tool in ToolCategories must have a description.
+	for tool := range categoryTools {
+		if _, ok := toolDescriptions[tool]; !ok {
+			t.Errorf("tool %q is in ToolCategories but missing from toolDescriptions", tool)
+		}
+	}
+
+	// Every tool in toolDescriptions must be in some category.
+	for tool := range toolDescriptions {
+		if !categoryTools[tool] {
+			t.Errorf("tool %q is in toolDescriptions but not in any ToolCategories category", tool)
+		}
+	}
+}
+
+// TestToolCategories_NoDuplicates ensures no tool appears in multiple categories.
+func TestToolCategories_NoDuplicates(t *testing.T) {
+	seen := map[string]string{} // tool → category
+	for catName, cat := range ToolCategories {
+		for _, tool := range cat.Tools {
+			if prevCat, ok := seen[tool]; ok {
+				t.Errorf("tool %q appears in both %q and %q categories", tool, prevCat, catName)
+			}
+			seen[tool] = catName
+		}
+	}
+}
+
 func TestRouter_FallbackToListCategories(t *testing.T) {
 	handler := routerHandler()
 

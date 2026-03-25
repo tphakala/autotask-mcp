@@ -18,15 +18,20 @@ import (
 const serverInstructions = "Autotask PSA MCP Server. Provides tools for managing tickets, companies, contacts, projects, time entries, billing, and more. Use autotask_search_* tools to find entities, autotask_get_* for details, and autotask_create_*/autotask_update_* for modifications. Use picklist tools to discover valid field values."
 
 // buildServer creates and configures an MCP server with all tool handlers registered.
-func buildServer(client *autotask.Client) *mcp.Server {
+// When lazyLoading is true, only 4 meta-tools are registered for progressive discovery.
+func buildServer(client *autotask.Client, lazyLoading bool) *mcp.Server {
 	s := mcp.NewServer(
 		&mcp.Implementation{Name: "autotask-mcp", Version: version},
 		&mcp.ServerOptions{Instructions: serverInstructions},
 	)
 
-	mapper := services.NewMappingCache(client)
-	picklist := services.NewPicklistCache(client)
-	tools.RegisterAll(s, client, mapper, picklist)
+	if lazyLoading {
+		tools.RegisterLazyTools(s)
+	} else {
+		mapper := services.NewMappingCache(client)
+		picklist := services.NewPicklistCache(client)
+		tools.RegisterAll(s, client, mapper, picklist)
+	}
 	resources.RegisterAll(s, client)
 
 	return s
@@ -73,8 +78,8 @@ func runStdio(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	defer client.Close() //nolint:errcheck
 
-	s := buildServer(client)
-	logger.Info("autotask-mcp ready", "transport", "stdio")
+	s := buildServer(client, cfg.LazyLoading)
+	logger.Info("autotask-mcp ready", "transport", "stdio", "lazyLoading", cfg.LazyLoading)
 	return s.Run(ctx, &mcp.StdioTransport{})
 }
 
@@ -113,7 +118,7 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	// Factory function returns an *mcp.Server for each request.
 	getServer := func(r *http.Request) *mcp.Server {
 		if cfg.AuthMode == "env" {
-			return buildServer(sharedClient)
+			return buildServer(sharedClient, cfg.LazyLoading)
 		}
 
 		// Gateway mode: extract credentials from request headers.
@@ -150,7 +155,7 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			logger.Error("failed to create autotask client for request", "error", err)
 			return nil
 		}
-		return buildServer(client)
+		return buildServer(client, cfg.LazyLoading)
 	}
 
 	mcpHandler := mcp.NewStreamableHTTPHandler(getServer, &mcp.StreamableHTTPOptions{

@@ -1,1 +1,17 @@
+# Binary
 autotask-mcp
+
+# Environment / credentials
+.env
+.env.*
+
+# OS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Logs
+*.log

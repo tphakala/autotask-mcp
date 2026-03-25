@@ -18,7 +18,7 @@ func connectMCP(t *testing.T, client *autotask.Client) *mcp.ClientSession {
 	t.Helper()
 	ctx := context.Background()
 
-	s := buildServer(client)
+	s := buildServer(client, false)
 	ct, st := mcp.NewInMemoryTransports()
 
 	ss, err := s.Connect(ctx, st, nil)
