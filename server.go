@@ -66,6 +66,7 @@ func runStdio(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 	clientOpts := []autotask.ClientOption{
 		autotask.WithLogger(logger),
+		autotask.WithMaxConcurrency(3),
 		autotask.WithRateLimiter(),
 		autotask.WithCircuitBreaker(),
 	}
