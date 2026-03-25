@@ -167,6 +167,39 @@ func TestEnhanceItems_NoEnhancedWhenNoIDs(t *testing.T) {
 	}
 }
 
+func TestEnhanceItems_BatchPreload(t *testing.T) {
+	// Use NewServer which supports query-based batch fetching.
+	company := autotasktest.CompanyFixture()
+	resource := autotasktest.ResourceFixture()
+	_, client := autotasktest.NewServer(t,
+		autotasktest.WithEntity(company),
+		autotasktest.WithEntity(resource),
+	)
+
+	companyID, _ := company.ID.Get()
+	resourceID, _ := resource.ID.Get()
+
+	cache := NewMappingCache(client)
+	items := []map[string]any{
+		{"companyID": float64(companyID), "assignedResourceID": float64(resourceID)},
+		{"companyID": float64(companyID)}, // same company, should be deduplicated
+	}
+
+	cache.EnhanceItems(context.Background(), items)
+
+	// Both items should have enhancement.
+	for i, item := range items {
+		enhanced, ok := item["_enhanced"].(map[string]any)
+		if !ok {
+			t.Errorf("item[%d]: expected _enhanced map", i)
+			continue
+		}
+		if enhanced["companyName"] == nil {
+			t.Errorf("item[%d]: expected companyName", i)
+		}
+	}
+}
+
 func TestToInt64(t *testing.T) {
 	tests := []struct {
 		input any

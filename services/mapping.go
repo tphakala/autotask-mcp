@@ -104,9 +104,28 @@ func (m *MappingCache) GetResourceName(ctx context.Context, id int64) string {
 	return name
 }
 
-// EnhanceItems iterates items and adds an "_enhanced" map with human-readable names.
-// Looks up companyID, assignedResourceID, resourceID, and projectLeadResourceID.
+// EnhanceItems adds an "_enhanced" map with human-readable names to each item.
+// It batch-preloads uncached company/resource names before enhancing to minimize API calls.
 func (m *MappingCache) EnhanceItems(ctx context.Context, items []map[string]any) {
+	// Collect unique IDs that need lookup.
+	companyIDs := make(map[int64]bool)
+	resourceIDs := make(map[int64]bool)
+	for _, item := range items {
+		if id, ok := toInt64(item["companyID"]); ok && id != 0 {
+			companyIDs[id] = true
+		}
+		for _, field := range []string{"assignedResourceID", "resourceID", "projectLeadResourceID"} {
+			if id, ok := toInt64(item[field]); ok && id != 0 {
+				resourceIDs[id] = true
+			}
+		}
+	}
+
+	// Batch preload uncached entries.
+	m.preloadCompanies(ctx, companyIDs)
+	m.preloadResources(ctx, resourceIDs)
+
+	// Now enhance using cached values (all lookups are cache hits).
 	for _, item := range items {
 		enhanced := make(map[string]any)
 
@@ -127,6 +146,88 @@ func (m *MappingCache) EnhanceItems(ctx context.Context, items []map[string]any)
 			item["_enhanced"] = enhanced
 		}
 	}
+}
+
+// preloadCompanies batch-fetches uncached company names via a single API query.
+func (m *MappingCache) preloadCompanies(ctx context.Context, ids map[int64]bool) {
+	uncached := m.filterUncached(ids, m.companies)
+	if len(uncached) == 0 {
+		return
+	}
+
+	q := autotask.NewQuery().
+		Where("id", autotask.OpIn, uncached).
+		Fields("id", "companyName").
+		Limit(len(uncached))
+
+	results, err := autotask.ListRaw(ctx, m.client, "Companies", q)
+	if err != nil {
+		return // fall back to per-ID lookups during enhance
+	}
+
+	now := time.Now()
+	m.mu.Lock()
+	for _, r := range results {
+		id, ok := toInt64(r["id"])
+		if !ok {
+			continue
+		}
+		name, _ := r["companyName"].(string)
+		if name != "" {
+			m.companies[id] = cacheEntry{name: name, expiry: now.Add(mappingTTL)}
+		}
+	}
+	m.mu.Unlock()
+}
+
+// preloadResources batch-fetches uncached resource names via a single API query.
+func (m *MappingCache) preloadResources(ctx context.Context, ids map[int64]bool) {
+	uncached := m.filterUncached(ids, m.resources)
+	if len(uncached) == 0 {
+		return
+	}
+
+	q := autotask.NewQuery().
+		Where("id", autotask.OpIn, uncached).
+		Fields("id", "firstName", "lastName").
+		Limit(len(uncached))
+
+	results, err := autotask.ListRaw(ctx, m.client, "Resources", q)
+	if err != nil {
+		return // fall back to per-ID lookups during enhance
+	}
+
+	now := time.Now()
+	m.mu.Lock()
+	for _, r := range results {
+		id, ok := toInt64(r["id"])
+		if !ok {
+			continue
+		}
+		first, _ := r["firstName"].(string)
+		last, _ := r["lastName"].(string)
+		name := strings.TrimSpace(first + " " + last)
+		if name != "" {
+			m.resources[id] = cacheEntry{name: name, expiry: now.Add(mappingTTL)}
+		}
+	}
+	m.mu.Unlock()
+}
+
+// filterUncached returns IDs from the set that are not in the cache (or expired).
+func (m *MappingCache) filterUncached(ids map[int64]bool, cache map[int64]cacheEntry) []int64 {
+	now := time.Now()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var uncached []int64
+	for id := range ids {
+		entry, ok := cache[id]
+		if !ok || now.After(entry.expiry) {
+			uncached = append(uncached, id)
+		}
+	}
+	return uncached
 }
 
 // toInt64 converts common numeric types to int64.
