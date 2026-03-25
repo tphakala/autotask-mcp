@@ -61,8 +61,7 @@ func searchContactsHandler(client *autotask.Client, mapper *services.MappingCach
 			q.Where("companyID", autotask.OpEq, in.CompanyID)
 		}
 		if in.IsActive != nil {
-			active := *in.IsActive == 1
-			q.Where("isActive", autotask.OpEq, active)
+			q.Where("isActive", autotask.OpEq, *in.IsActive)
 		}
 
 		contacts, err := autotask.List[entities.Contact](ctx, client, q)
