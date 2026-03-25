@@ -26,7 +26,6 @@ type CreateExpenseReportInput struct {
 	Name           string `json:"name" jsonschema:"Expense report name"`
 	SubmitterID    int64  `json:"submitterId" jsonschema:"Resource ID of the submitter"`
 	WeekEndingDate string `json:"weekEndingDate" jsonschema:"Week-ending date (YYYY-MM-DD or ISO format)"`
-	Description    string `json:"description,omitempty" jsonschema:"Report description"`
 }
 
 // CreateExpenseItemInput defines the input parameters for creating an expense item.
@@ -137,12 +136,6 @@ func createExpenseReportHandler(client *autotask.Client) func(ctx context.Contex
 			SubmitterID: autotask.Set(in.SubmitterID),
 			WeekEnding:  autotask.Set(weekEnding),
 		}
-		if in.Description != "" {
-			// ExpenseReport has no Description field; store in RejectionReason as fallback is wrong.
-			// The entity struct does not have a Description field, so we skip it.
-			_ = in.Description
-		}
-
 		created, err := autotask.Create[entities.ExpenseReport](ctx, client, entity)
 		if err != nil {
 			return errorResult("failed to create expense report: %v", err)

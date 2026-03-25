@@ -83,7 +83,6 @@ func TestCreateExpenseReportHandler_Success(t *testing.T) {
 		Name:           "Weekly Expense Report",
 		SubmitterID:    5001,
 		WeekEndingDate: "2024-01-19",
-		Description:    "Test report",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
