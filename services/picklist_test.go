@@ -19,8 +19,8 @@ func fieldsFixture() map[string]any {
 				"isReadOnly": false,
 				"isPickList": true,
 				"picklistValues": []map[string]any{
-					{"value": 1, "label": "New", "isActive": true},
-					{"value": 5, "label": "Complete", "isActive": true},
+					{"value": "1", "label": "New", "isActive": true},
+					{"value": "5", "label": "Complete", "isActive": true},
 				},
 			},
 			{
