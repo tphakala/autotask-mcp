@@ -6,9 +6,10 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o autotask-mcp .
 
-FROM gcr.io/distroless/static-debian12
+FROM alpine:3.21
+RUN apk --no-cache add ca-certificates wget && adduser -D -u 10001 appuser
 COPY --from=builder /app/autotask-mcp /autotask-mcp
-USER nonroot:nonroot
+USER appuser
 ENV MCP_TRANSPORT=http
 ENV MCP_HTTP_PORT=8080
 ENV MCP_HTTP_HOST=0.0.0.0
