@@ -18,7 +18,6 @@ type GetTicketNoteInput struct {
 // SearchTicketNotesInput defines the input parameters for searching ticket notes.
 type SearchTicketNotesInput struct {
 	TicketID int64 `json:"ticketId" jsonschema:"Ticket ID to list notes for"`
-	PageSize int   `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
 }
 
 // CreateTicketNoteInput defines the input parameters for creating a ticket note.
@@ -39,7 +38,6 @@ type GetProjectNoteInput struct {
 // SearchProjectNotesInput defines the input parameters for searching project notes.
 type SearchProjectNotesInput struct {
 	ProjectID int64 `json:"projectId" jsonschema:"Project ID to list notes for"`
-	PageSize  int   `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
 }
 
 // CreateProjectNoteInput defines the input parameters for creating a project note.
@@ -59,7 +57,6 @@ type GetCompanyNoteInput struct {
 // SearchCompanyNotesInput defines the input parameters for searching company notes.
 type SearchCompanyNotesInput struct {
 	CompanyID int64 `json:"companyId" jsonschema:"Company ID to list notes for"`
-	PageSize  int   `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
 }
 
 // CreateCompanyNoteInput defines the input parameters for creating a company note.

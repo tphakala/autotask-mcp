@@ -12,7 +12,11 @@ import (
 	"github.com/tphakala/go-autotask/entities"
 )
 
-const mimeTypeJSON = "application/json"
+const (
+	mimeTypeJSON        = "application/json"
+	defaultResourceLimit = 50
+	statusCompleted      = 5
+)
 
 // RegisterAll registers all MCP resource endpoints with the server.
 func RegisterAll(s *mcp.Server, client *autotask.Client) {
@@ -20,28 +24,28 @@ func RegisterAll(s *mcp.Server, client *autotask.Client) {
 	s.AddResource(&mcp.Resource{
 		URI:         "autotask://companies",
 		Name:        "companies",
-		Description: "List all companies in Autotask",
+		Description: "List companies in Autotask (up to 50)",
 		MIMEType:    mimeTypeJSON,
 	}, listCompaniesHandler(client))
 
 	s.AddResource(&mcp.Resource{
 		URI:         "autotask://contacts",
 		Name:        "contacts",
-		Description: "List all contacts in Autotask",
+		Description: "List contacts in Autotask (up to 50)",
 		MIMEType:    mimeTypeJSON,
 	}, listContactsHandler(client))
 
 	s.AddResource(&mcp.Resource{
 		URI:         "autotask://tickets",
 		Name:        "tickets",
-		Description: "List open tickets in Autotask",
+		Description: "List open tickets in Autotask (up to 50)",
 		MIMEType:    mimeTypeJSON,
 	}, listTicketsHandler(client))
 
 	s.AddResource(&mcp.Resource{
 		URI:         "autotask://time-entries",
 		Name:        "time-entries",
-		Description: "List time entries in Autotask",
+		Description: "List time entries in Autotask (up to 50)",
 		MIMEType:    mimeTypeJSON,
 	}, listTimeEntriesHandler(client))
 
@@ -96,7 +100,7 @@ func jsonResult(uri string, v any) (*mcp.ReadResourceResult, error) {
 // listCompaniesHandler returns a ResourceHandler that lists all companies.
 func listCompaniesHandler(client *autotask.Client) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		q := autotask.NewQuery().Limit(50)
+		q := autotask.NewQuery().Limit(defaultResourceLimit)
 		companies, err := autotask.List[entities.Company](ctx, client, q)
 		if err != nil {
 			return nil, fmt.Errorf("list companies: %w", err)
@@ -123,7 +127,7 @@ func getCompanyHandler(client *autotask.Client) mcp.ResourceHandler {
 // listContactsHandler returns a ResourceHandler that lists all contacts.
 func listContactsHandler(client *autotask.Client) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		q := autotask.NewQuery().Limit(50)
+		q := autotask.NewQuery().Limit(defaultResourceLimit)
 		contacts, err := autotask.List[entities.Contact](ctx, client, q)
 		if err != nil {
 			return nil, fmt.Errorf("list contacts: %w", err)
@@ -150,8 +154,8 @@ func getContactHandler(client *autotask.Client) mcp.ResourceHandler {
 // listTicketsHandler returns a ResourceHandler that lists open tickets.
 func listTicketsHandler(client *autotask.Client) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		q := autotask.NewQuery().Limit(50)
-		q.Where("status", autotask.OpNotEq, 5) // exclude completed
+		q := autotask.NewQuery().Limit(defaultResourceLimit)
+		q.Where("status", autotask.OpNotEq, statusCompleted)
 		tickets, err := autotask.List[entities.Ticket](ctx, client, q)
 		if err != nil {
 			return nil, fmt.Errorf("list tickets: %w", err)
@@ -178,7 +182,7 @@ func getTicketHandler(client *autotask.Client) mcp.ResourceHandler {
 // listTimeEntriesHandler returns a ResourceHandler that lists time entries.
 func listTimeEntriesHandler(client *autotask.Client) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		q := autotask.NewQuery().Limit(50)
+		q := autotask.NewQuery().Limit(defaultResourceLimit)
 		timeEntries, err := autotask.List[entities.TimeEntry](ctx, client, q)
 		if err != nil {
 			return nil, fmt.Errorf("list time entries: %w", err)

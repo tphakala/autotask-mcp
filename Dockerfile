@@ -8,6 +8,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o autotask-mcp .
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=builder /app/autotask-mcp /autotask-mcp
+USER nonroot:nonroot
 ENV MCP_TRANSPORT=http
 ENV MCP_HTTP_PORT=8080
 ENV MCP_HTTP_HOST=0.0.0.0

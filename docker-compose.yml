@@ -3,11 +3,10 @@ services:
     build: .
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
       - MCP_TRANSPORT=http
       - MCP_HTTP_PORT=8080
-      - AUTOTASK_USERNAME=${AUTOTASK_USERNAME}
-      - AUTOTASK_SECRET=${AUTOTASK_SECRET}
-      - AUTOTASK_INTEGRATION_CODE=${AUTOTASK_INTEGRATION_CODE}
       - AUTH_MODE=${AUTH_MODE:-env}
       - LOG_LEVEL=${LOG_LEVEL:-info}

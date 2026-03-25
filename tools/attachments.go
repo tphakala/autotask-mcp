@@ -10,15 +10,12 @@ import (
 
 // GetTicketAttachmentInput defines the input parameters for getting a ticket attachment.
 type GetTicketAttachmentInput struct {
-	TicketID     int64 `json:"ticketId" jsonschema:"Ticket ID that owns the attachment"`
 	AttachmentID int64 `json:"attachmentId" jsonschema:"Attachment ID to retrieve"`
-	IncludeData  bool  `json:"includeData,omitempty" jsonschema:"Whether to include the attachment binary data"`
 }
 
 // SearchTicketAttachmentsInput defines the input parameters for searching ticket attachments.
 type SearchTicketAttachmentsInput struct {
 	TicketID int64 `json:"ticketId" jsonschema:"Ticket ID to list attachments for"`
-	PageSize int   `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
 }
 
 // RegisterAttachmentTools registers all attachment-related MCP tools with the server.

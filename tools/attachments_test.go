@@ -21,7 +21,7 @@ func TestGetTicketAttachmentHandler_NotFound(t *testing.T) {
 	handler := getTicketAttachmentHandler(client)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetTicketAttachmentInput{TicketID: 3001, AttachmentID: 99999})
+	result, _, err := handler(ctx, nil, GetTicketAttachmentInput{AttachmentID: 99999})
 	if err != nil {
 		t.Fatalf("unexpected protocol error: %v", err)
 	}

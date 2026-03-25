@@ -410,15 +410,21 @@ func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 		}
 
 		// Auto-determine quoteItemType if not provided.
+		// Autotask quote item type constants.
+		const (
+			quoteItemProduct       = 1
+			quoteItemService       = 11
+			quoteItemServiceBundle = 12
+		)
 		itemType := in.QuoteItemType
 		if itemType == 0 {
 			switch {
 			case in.ProductID != 0:
-				itemType = 1
+				itemType = quoteItemProduct
 			case in.ServiceID != 0:
-				itemType = 11 //nolint:mnd // Autotask quote item type constant for services
+				itemType = quoteItemService
 			case in.ServiceBundleID != 0:
-				itemType = 12 //nolint:mnd // Autotask quote item type constant for service bundles
+				itemType = quoteItemServiceBundle
 			}
 		}
 		if itemType != 0 {

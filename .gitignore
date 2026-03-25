@@ -13,5 +13,8 @@ autotask-mcp
 *.swo
 *~
 
+# Build artifacts
+dist/
+
 # Logs
 *.log
