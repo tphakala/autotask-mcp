@@ -85,7 +85,7 @@ func TestGetPicklistValues_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(values) != 2 {
-		t.Errorf("expected 2 picklist values, got %d", len(values))
+		t.Fatalf("expected 2 picklist values, got %d", len(values))
 	}
 
 	var labels []string
