@@ -6,7 +6,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o autotask-mcp .
 
-FROM alpine:3.21
+FROM alpine:3.24
 RUN apk --no-cache add ca-certificates wget && adduser -D -u 10001 appuser
 COPY --from=builder /app/autotask-mcp /autotask-mcp
 USER appuser
