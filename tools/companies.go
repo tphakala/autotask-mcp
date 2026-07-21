@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
-	"github.com/tphakala/autotask-mcp/services"
 )
 
 // SearchCompaniesInput defines the input parameters for searching companies.
@@ -47,17 +47,20 @@ type UpdateCompanyInput struct {
 func RegisterCompanyTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_companies",
-		Description: "Search for companies in Autotask. Returns 25 results per page by default.",
+		Description: "Find companies by name substring and active status, returning a compact paginated summary (25 per page, max 200). Use this to locate a company and its ID for other tools; to add a new company instead use autotask_create_company. Omitting the active filter returns both active and inactive companies. Read-only.",
+		Annotations: readOnlyTool("Search companies"),
 	}, searchCompaniesHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_company",
-		Description: "Create a new company in Autotask.",
+		Description: "Add a new company record from a company name and a numeric company-type ID, with optional phone, address, owner resource, and active flag. Requires companyName and companyType; returns the created company including its new ID. To change an existing company use autotask_update_company instead. Writes to Autotask.",
+		Annotations: createTool("Create company"),
 	}, createCompanyHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_update_company",
-		Description: "Update an existing company. Only provided fields are changed.",
+		Description: "Change fields on an existing company identified by id; only the fields you supply (name, phone, address, or active flag) are modified, the rest are left untouched. Use autotask_create_company to add a new company instead. Writes to Autotask.",
+		Annotations: updateTool("Update company"),
 	}, updateCompanyHandler(client))
 }
 

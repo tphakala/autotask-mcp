@@ -29,7 +29,7 @@ func TestRegisterTicketTools_NoPanic(t *testing.T) {
 
 // TestSearchTicketsHandler_ReturnsNoTicketsFound tests the empty-result case.
 func TestSearchTicketsHandler_ReturnsNoTicketsFound(t *testing.T) {
-	// Server with no pre-seeded tickets — all queries return 0 items.
+	// Server with no pre-seeded tickets; all queries return 0 items.
 	_, client := autotasktest.NewServer(t)
 	mapper := newTestMapper(client)
 

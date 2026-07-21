@@ -2,7 +2,7 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for [Kaseya Autotask PSA](https://www.autotask.com/), written in Go.
 
-Provides AI assistants (Claude, GPT, etc.) with structured access to Autotask data and operations — tickets, companies, contacts, projects, time entries, billing, quotes, and more.
+Provides AI assistants (Claude, GPT, etc.) with structured access to Autotask data and operations: tickets, companies, contacts, projects, time entries, billing, quotes, and more.
 
 ## Features
 
@@ -62,8 +62,8 @@ docker compose up -d
 ```
 
 The server starts on port 8080 with endpoints:
-- `POST /mcp` — MCP Streamable HTTP transport
-- `GET /health` — Health check
+- `POST /mcp`: MCP Streamable HTTP transport
+- `GET /health`: Health check
 
 ### Gateway Mode
 
@@ -79,9 +79,9 @@ X-Integration-Code: code
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOTASK_USERNAME` | — | Autotask API username (required for env mode) |
-| `AUTOTASK_SECRET` | — | Autotask API secret (required for env mode) |
-| `AUTOTASK_INTEGRATION_CODE` | — | Autotask integration code (required for env mode) |
+| `AUTOTASK_USERNAME` | (required) | Autotask API username for env mode |
+| `AUTOTASK_SECRET` | (required) | Autotask API secret for env mode |
+| `AUTOTASK_INTEGRATION_CODE` | (required) | Autotask integration code for env mode |
 | `AUTOTASK_API_URL` | auto-discovered | Override API base URL |
 | `MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `http` |
 | `MCP_HTTP_PORT` | `8080` | HTTP server port |
@@ -156,8 +156,8 @@ autotask-mcp
 ```
 
 Built on:
-- [go-autotask](https://github.com/tphakala/go-autotask) — Autotask REST API client with typed generics
-- [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) — Official MCP server framework
+- [go-autotask](https://github.com/tphakala/go-autotask): Autotask REST API client with typed generics
+- [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk): Official MCP server framework
 
 ## Building
 

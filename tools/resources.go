@@ -21,7 +21,8 @@ type SearchResourcesInput struct {
 func RegisterResourceTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_resources",
-		Description: "Search for resources (employees/contractors) in Autotask. Returns 25 results per page by default.",
+		Description: "Find internal staff (employees, contractors, or temporary workers) of the Autotask account by name or email substring, active status, and resource type, returning a compact paginated summary (25 per page, max 500). Resources are the people assigned to tickets and tasks; for client-side people at a company use autotask_search_contacts instead. Use the returned resource ID as assignedResourceID when creating or updating tickets. Read-only.",
+		Annotations: readOnlyTool("Search resources"),
 	}, searchResourcesHandler(client))
 }
 

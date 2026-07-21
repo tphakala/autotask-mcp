@@ -9,7 +9,7 @@
 **Fix:**
 - Change `buildServer(client)` signature to `buildServer(client, lazyLoading bool)`
 - Add conditional: if `lazyLoading`, call `tools.RegisterLazyTools(s)` instead of `tools.RegisterAll(s, ...)`
-- **Skip MappingCache/PicklistCache initialization when lazy loading** — these are unused in lazy mode and would waste memory / potentially trigger API calls (Gemini review feedback)
+- **Skip MappingCache/PicklistCache initialization when lazy loading**: these are unused in lazy mode and would waste memory / potentially trigger API calls (Gemini review feedback)
 - Resources should still be registered regardless of lazy loading mode
 - Update all callers: `runStdio`, `runHTTP` (env mode reuse), `runHTTP` (gateway mode per-request)
 - Update `server_test.go` to test both modes
@@ -48,7 +48,7 @@
 
 ## Out of Scope
 
-- **Migrate Raw operations to typed entities** — blocked on go-autotask generator fixing `Id` vs `ID` field naming (being worked on in another session)
-- **Resource handler error handling** — reviewed and confirmed correct; `jsonResult()` errors ARE propagated via the `(*mcp.ReadResourceResult, error)` return
-- **Gateway client cleanup** — SDK limitation, already documented with TODO
-- **Additional integration tests** — existing 5 tests provide adequate smoke coverage; more can be added incrementally
+- **Migrate Raw operations to typed entities**: blocked on go-autotask generator fixing `Id` vs `ID` field naming (being worked on in another session)
+- **Resource handler error handling**: reviewed and confirmed correct; `jsonResult()` errors ARE propagated via the `(*mcp.ReadResourceResult, error)` return
+- **Gateway client cleanup**: SDK limitation, already documented with TODO
+- **Additional integration tests**: existing 5 tests provide adequate smoke coverage; more can be added incrementally

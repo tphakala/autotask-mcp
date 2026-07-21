@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
-	"github.com/tphakala/autotask-mcp/services"
 )
 
 // SearchTicketsInput defines the input parameters for searching tickets.
@@ -60,22 +60,26 @@ type UpdateTicketInput struct {
 func RegisterTicketTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_tickets",
-		Description: "Search for tickets in Autotask. Returns 25 results per page. Use get_ticket_details for full data.",
+		Description: "Find open tickets by company, status, assignee, unassigned flag, ticket-number prefix, or create/activity date range, returning a compact paginated summary (25 per page, max 500). Excludes completed tickets (status 5) unless a status filter is given. Use this to locate tickets, then autotask_get_ticket_details for the full field set of one ticket. Read-only.",
+		Annotations: readOnlyTool("Search tickets"),
 	}, searchTicketsHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_ticket_details",
-		Description: "Get detailed information for a specific ticket by ID.",
+		Description: "Retrieve the complete field set of one ticket by its numeric ID, with resolved names for status, company, and assignee. Use after autotask_search_tickets, which returns only a compact summary. Read-only.",
+		Annotations: readOnlyTool("Get ticket details"),
 	}, getTicketDetailsHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_ticket",
-		Description: "Create a new ticket in Autotask.",
+		Description: "Open a service ticket for a company from a title and description, with optional status, priority, assignment, and contact. Requires companyID, title, and description; returns the created ticket including its new ID. To change an existing ticket use autotask_update_ticket instead. Writes to Autotask.",
+		Annotations: createTool("Create ticket"),
 	}, createTicketHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_update_ticket",
-		Description: "Update an existing ticket. Only provided fields are changed.",
+		Description: "Change fields on an existing ticket identified by ticketId; only the fields you supply are modified, the rest are left untouched. Use autotask_create_ticket to open a new ticket instead. Writes to Autotask.",
+		Annotations: updateTool("Update ticket"),
 	}, updateTicketHandler(client))
 }
 

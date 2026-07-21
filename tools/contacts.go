@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
-	"github.com/tphakala/autotask-mcp/services"
 )
 
 // SearchContactsInput defines the input parameters for searching contacts.
@@ -33,12 +33,14 @@ type CreateContactInput struct {
 func RegisterContactTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_contacts",
-		Description: "Search for contacts in Autotask. Returns 25 results per page by default.",
+		Description: "Find contacts by name or email substring, company ID, or active status, returning a compact paginated summary (25 per page, max 200). A searchTerm matches across first name, last name, and email address. Use this to locate a contact and its ID; to add a new one instead use autotask_create_contact. Read-only.",
+		Annotations: readOnlyTool("Search contacts"),
 	}, searchContactsHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_contact",
-		Description: "Create a new contact in Autotask.",
+		Description: "Add a new contact under a company from a first and last name, with optional email, phone, and job title. Requires companyID, firstName, and lastName, and returns the created contact including its new ID; look up the companyID with autotask_search_companies. To find existing contacts instead use autotask_search_contacts. Writes to Autotask.",
+		Annotations: createTool("Create contact"),
 	}, createContactHandler(client))
 }
 

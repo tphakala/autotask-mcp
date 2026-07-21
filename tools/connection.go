@@ -12,7 +12,8 @@ import (
 func RegisterConnectionTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_test_connection",
-		Description: "Test the connection to Autotask and verify credentials are valid.",
+		Description: "Verify that the configured Autotask API credentials authenticate by fetching entity metadata for the Tickets entity, and report its canCreate, canUpdate, and canQuery permission flags. Takes no arguments; use this first to confirm connectivity and permissions before calling data tools such as autotask_search_tickets. Read-only.",
+		Annotations: readOnlyTool("Test connection"),
 	}, testConnectionHandler(client))
 }
 
