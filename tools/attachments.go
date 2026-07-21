@@ -23,12 +23,14 @@ type SearchTicketAttachmentsInput struct {
 func RegisterAttachmentTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_ticket_attachment",
-		Description: "Get a specific attachment for a ticket by attachment ID.",
+		Description: "Retrieve one ticket attachment by its numeric attachment ID, returning its full record. Use when you already have a specific attachment ID; to list every attachment belonging to a ticket use autotask_search_ticket_attachments instead. Read-only.",
+		Annotations: readOnlyTool("Get ticket attachment"),
 	}, getTicketAttachmentHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_ticket_attachments",
-		Description: "List all attachments for a ticket.",
+		Description: "List every attachment belonging to one ticket, identified by its ticketId, returning all attachment records for that ticket without pagination. Use this to discover a ticket's attachments, then autotask_get_ticket_attachment to retrieve one by its attachment ID. Read-only.",
+		Annotations: readOnlyTool("Search ticket attachments"),
 	}, searchTicketAttachmentsHandler(client))
 }
 

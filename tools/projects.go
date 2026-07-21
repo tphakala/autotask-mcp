@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
-	"github.com/tphakala/autotask-mcp/services"
 )
 
 // SearchProjectsInput defines the input parameters for searching projects.
@@ -21,12 +21,12 @@ type SearchProjectsInput struct {
 
 // CreateProjectInput defines the input parameters for creating a new project.
 type CreateProjectInput struct {
-	CompanyID      int64   `json:"companyID" jsonschema:"Company ID"`
-	ProjectName    string  `json:"projectName" jsonschema:"Project name"`
-	Status         int     `json:"status" jsonschema:"Project status (1=New, 2=In Progress, 5=Complete)"`
-	Description    string  `json:"description,omitempty" jsonschema:"Project description"`
-	StartDate      string  `json:"startDate,omitempty" jsonschema:"Start date (YYYY-MM-DD or ISO format)"`
-	EndDate        string  `json:"endDate,omitempty" jsonschema:"End date (YYYY-MM-DD or ISO format)"`
+	CompanyID      int64    `json:"companyID" jsonschema:"Company ID"`
+	ProjectName    string   `json:"projectName" jsonschema:"Project name"`
+	Status         int      `json:"status" jsonschema:"Project status (1=New, 2=In Progress, 5=Complete)"`
+	Description    string   `json:"description,omitempty" jsonschema:"Project description"`
+	StartDate      string   `json:"startDate,omitempty" jsonschema:"Start date (YYYY-MM-DD or ISO format)"`
+	EndDate        string   `json:"endDate,omitempty" jsonschema:"End date (YYYY-MM-DD or ISO format)"`
 	EstimatedHours *float64 `json:"estimatedHours,omitempty" jsonschema:"Estimated hours"`
 }
 
@@ -34,12 +34,14 @@ type CreateProjectInput struct {
 func RegisterProjectTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_projects",
-		Description: "Search for projects in Autotask. Returns 25 results per page by default.",
+		Description: "Find projects by name substring, company ID, or status, returning a compact paginated summary (25 per page, max 100). Use this to locate existing projects; to add a new one use autotask_create_project instead. Returns projects of every status when no status filter is given, including completed projects. Read-only.",
+		Annotations: readOnlyTool("Search projects"),
 	}, searchProjectsHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_project",
-		Description: "Create a new project in Autotask.",
+		Description: "Create a project for a company from a project name and status, with optional description, start and end dates, and estimated hours. Requires companyID, projectName, and status (1=New, 2=In Progress, 5=Complete); returns the created project including its new ID. To find existing projects use autotask_search_projects instead. Writes to Autotask.",
+		Annotations: createTool("Create project"),
 	}, createProjectHandler(client))
 }
 
@@ -127,4 +129,3 @@ func createProjectHandler(client *autotask.Client) func(ctx context.Context, req
 		return textResult("%s", string(data))
 	}
 }
-

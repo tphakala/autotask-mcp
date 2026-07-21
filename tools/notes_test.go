@@ -31,7 +31,7 @@ func TestSearchTicketNotesHandler_NoNotes(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
-	// The result may be an error (404 from mock) or success — both are acceptable.
+	// The result may be an error (404 from mock) or success; both are acceptable.
 	// We only verify there is no panic and a result is returned.
 }
 

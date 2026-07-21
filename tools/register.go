@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/autotask-mcp/services"
+	autotask "github.com/tphakala/go-autotask"
 )
 
 // RegisterAll registers every tool category with the MCP server.
@@ -29,6 +29,32 @@ func RegisterAll(s *mcp.Server, client *autotask.Client, mapper *services.Mappin
 	RegisterBillingTools(s, client, mapper)
 	RegisterExpenseTools(s, client)
 	RegisterPicklistTools(s, client, picklist)
+}
+
+// readOnlyTool annotates a tool that only reads from the Autotask API (open world).
+// DestructiveHint is set false explicitly (redundant under ReadOnlyHint, but unambiguous for scanners).
+func readOnlyTool(title string) *mcp.ToolAnnotations {
+	return &mcp.ToolAnnotations{Title: title, ReadOnlyHint: true, DestructiveHint: new(false), OpenWorldHint: new(true)}
+}
+
+// createTool annotates a tool that additively creates a new Autotask record.
+func createTool(title string) *mcp.ToolAnnotations {
+	return &mcp.ToolAnnotations{Title: title, DestructiveHint: new(false), IdempotentHint: false, OpenWorldHint: new(true)}
+}
+
+// updateTool annotates a tool that overwrites fields on an existing Autotask record.
+func updateTool(title string) *mcp.ToolAnnotations {
+	return &mcp.ToolAnnotations{Title: title, DestructiveHint: new(true), IdempotentHint: true, OpenWorldHint: new(true)}
+}
+
+// deleteTool annotates a tool that deletes an Autotask record.
+func deleteTool(title string) *mcp.ToolAnnotations {
+	return &mcp.ToolAnnotations{Title: title, DestructiveHint: new(true), IdempotentHint: true, OpenWorldHint: new(true)}
+}
+
+// localReadTool annotates a read-only tool that operates on local metadata (closed world).
+func localReadTool(title string) *mcp.ToolAnnotations {
+	return &mcp.ToolAnnotations{Title: title, ReadOnlyHint: true, OpenWorldHint: new(false)}
 }
 
 // entityToMap converts a typed entity to map[string]any for formatting/enhancement.

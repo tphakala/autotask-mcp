@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
-	"github.com/tphakala/autotask-mcp/services"
 )
 
 // --- Quote inputs ---
@@ -147,71 +147,84 @@ func RegisterFinancialTools(s *mcp.Server, client *autotask.Client, mapper *serv
 	// Quotes
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_quote",
-		Description: "Get a specific quote by ID.",
+		Description: "Retrieve one sales quote by its numeric quoteId, returning its full field set. To locate quotes by company, contact, opportunity, or name use autotask_search_quotes instead. Read-only.",
+		Annotations: readOnlyTool("Get quote"),
 	}, getQuoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_quotes",
-		Description: "Search for quotes in Autotask.",
+		Description: "Find sales quotes filtered by company, contact, opportunity, or quote-name substring, returning up to pageSize matches (default 25, max 500). Use this to locate quotes, then autotask_get_quote for the full field set of one quote by its ID. Read-only.",
+		Annotations: readOnlyTool("Search quotes"),
 	}, searchQuotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_quote",
-		Description: "Create a new quote in Autotask.",
+		Description: "Create a sales quote for a company, optionally linked to a contact or opportunity, with a name, description, and effective and expiration dates. Requires companyId; returns the created quote including its new ID. Add line items to it afterward with autotask_create_quote_item. Writes to Autotask.",
+		Annotations: createTool("Create quote"),
 	}, createQuoteHandler(client))
 
 	// Quote Items
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_quote_item",
-		Description: "Get a specific quote item by ID.",
+		Description: "Retrieve one line item on a quote by its numeric quoteItemId, returning its full field set including quantity, pricing, discounts, and the linked product, service, or service bundle. To list the items belonging to a quote use autotask_search_quote_items instead. Read-only.",
+		Annotations: readOnlyTool("Get quote item"),
 	}, getQuoteItemHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_quote_items",
-		Description: "Search for quote items in Autotask.",
+		Description: "Find line items belonging to a quote, filtered by quoteId or item-name substring, returning up to pageSize matches (default 25, max 500). Use this to list a quote's items, then autotask_get_quote_item for the full field set of one item by its ID. Read-only.",
+		Annotations: readOnlyTool("Search quote items"),
 	}, searchQuoteItemsHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_quote_item",
-		Description: "Create a new item on a quote. Quote item type is auto-determined from productID, serviceID, or serviceBundleID if not specified.",
+		Description: "Add a line item to an existing quote from a quantity plus optional pricing, discounts, and a linked product, service, or service bundle. Requires quoteId and quantity; when quoteItemType is omitted it is inferred from productID (type 1), serviceID (type 11), or serviceBundleID (type 12). To change an existing item use autotask_update_quote_item, or autotask_delete_quote_item to remove one. Writes to Autotask.",
+		Annotations: createTool("Create quote item"),
 	}, createQuoteItemHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_update_quote_item",
-		Description: "Update an existing quote item. Only provided fields are changed.",
+		Description: "Change fields (quantity, unit price, discounts, optional flag, sort order) on an existing quote line item identified by quoteItemId; only the fields you supply are modified, the rest are left untouched. Use autotask_create_quote_item to add a new item, or autotask_delete_quote_item to remove one. Writes to Autotask.",
+		Annotations: updateTool("Update quote item"),
 	}, updateQuoteItemHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_delete_quote_item",
-		Description: "Delete a quote item.",
+		Description: "Permanently remove one line item from its quote, identified by quoteId and quoteItemId. Use autotask_update_quote_item to change an item's fields instead of deleting it. Writes to Autotask.",
+		Annotations: deleteTool("Delete quote item"),
 	}, deleteQuoteItemHandler(client))
 
 	// Opportunities
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_opportunity",
-		Description: "Get a specific opportunity by ID.",
+		Description: "Retrieve one sales opportunity by its numeric opportunityId, returning its full field set. To find opportunities by company, title, or status use autotask_search_opportunities instead. Read-only.",
+		Annotations: readOnlyTool("Get opportunity"),
 	}, getOpportunityHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_opportunities",
-		Description: "Search for opportunities in Autotask.",
+		Description: "Find sales opportunities filtered by company, title substring, or status, returning up to pageSize matches (default 25, max 500). Use this to locate opportunities, then autotask_get_opportunity for the full field set of one opportunity by its ID. Read-only.",
+		Annotations: readOnlyTool("Search opportunities"),
 	}, searchOpportunitiesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_opportunity",
-		Description: "Create a new opportunity in Autotask.",
+		Description: "Create a sales opportunity for a company from a title, owner resource, status, stage, projected close date, and start date, with optional amount, cost, win probability, and category. Requires title, companyId, ownerResourceId, status, stage, projectedCloseDate, and startDate; returns the created opportunity including its new ID. Reference that ID as opportunityId when adding quotes with autotask_create_quote. Writes to Autotask.",
+		Annotations: createTool("Create opportunity"),
 	}, createOpportunityHandler(client))
 
 	// Invoices
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_invoices",
-		Description: "Search for invoices in Autotask.",
+		Description: "Find invoices filtered by company, exact invoice number, or voided status, returning up to pageSize matches (default 25, max 500). This is the only invoice tool; invoices are generated by Autotask billing rather than through this server, and each match is returned with its full field set inline. Read-only.",
+		Annotations: readOnlyTool("Search invoices"),
 	}, searchInvoicesHandler(client))
 
 	// Contracts
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_contracts",
-		Description: "Search for contracts in Autotask.",
+		Description: "Find customer contracts filtered by company, contract-name substring, or status, returning a compact paginated summary (25 per page, max 500) with resolved reference names. This is the only contract tool; use the returned contract IDs to filter related resources such as tickets and time entries. Read-only.",
+		Annotations: readOnlyTool("Search contracts"),
 	}, searchContractsHandler(client, mapper))
 }
 

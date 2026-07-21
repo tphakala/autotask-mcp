@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
-	"github.com/tphakala/autotask-mcp/services"
 )
 
 // CreateTimeEntryInput defines the input parameters for creating a new time entry.
@@ -37,12 +37,14 @@ type SearchTimeEntriesInput struct {
 func RegisterTimeEntryTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_time_entry",
-		Description: "Create a new time entry in Autotask.",
+		Description: "Log hours worked by a resource on a given date, with summary notes and optional attachment to a ticket, a billing code, and start/end times. Requires resourceID, dateWorked, hoursWorked, and summaryNotes; returns the created entry including its new ID. To find existing entries use autotask_search_time_entries instead. Writes to Autotask.",
+		Annotations: createTool("Create time entry"),
 	}, createTimeEntryHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_time_entries",
-		Description: "Search for time entries in Autotask. Returns 25 results per page by default.",
+		Description: "Find logged time entries by resource, ticket, or date-worked range, returning a compact paginated summary (25 per page, max 500). Use this to review or locate recorded time; to log new time use autotask_create_time_entry instead. Read-only.",
+		Annotations: readOnlyTool("Search time entries"),
 	}, searchTimeEntriesHandler(client, mapper))
 }
 

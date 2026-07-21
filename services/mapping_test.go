@@ -61,7 +61,7 @@ func TestGetCompanyName_CacheHit(t *testing.T) {
 }
 
 func TestGetCompanyName_ErrorFallback(t *testing.T) {
-	// No fixture registered — will return 404 / connection error
+	// No fixture registered, so this returns a 404 or connection error
 	client := autotasktest.NewMockClient(t)
 	cache := NewMappingCache(client)
 

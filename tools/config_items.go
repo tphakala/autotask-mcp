@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
-	"github.com/tphakala/autotask-mcp/services"
 )
 
 // SearchConfigurationItemsInput defines the input parameters for searching configuration items.
@@ -22,7 +22,8 @@ type SearchConfigurationItemsInput struct {
 func RegisterConfigItemTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_configuration_items",
-		Description: "Search for configuration items (CIs) in Autotask.",
+		Description: "Find configuration items (CIs: assets or installed products tracked against a company) by reference-title substring, company, active status, or product, returning a compact summary of up to 25 (max 500). CIs link a company to the products it owns; filter by companyID to list one company's assets or by productID (from autotask_search_products) to find every install of a product. Read-only.",
+		Annotations: readOnlyTool("Search configuration items"),
 	}, searchConfigurationItemsHandler(client, mapper))
 }
 

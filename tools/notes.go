@@ -68,47 +68,56 @@ type CreateCompanyNoteInput struct {
 func RegisterNoteTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_ticket_note",
-		Description: "Get a specific note for a ticket by note ID.",
+		Description: "Retrieve one ticket note by its numeric note ID, returning the note title, body, type, and publish scope recorded against a service ticket. Use autotask_search_ticket_notes to list every note on a ticket when you do not yet know the note ID. Read-only.",
+		Annotations: readOnlyTool("Get ticket note"),
 	}, getTicketNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_ticket_notes",
-		Description: "List all notes for a ticket.",
+		Description: "List every note attached to one service ticket, identified by ticketId, returning each note's title, body, and metadata. Use this to browse a ticket's notes, then autotask_get_ticket_note to fetch a single note once you have its ID. Returns all notes for the ticket without pagination. Read-only.",
+		Annotations: readOnlyTool("Search ticket notes"),
 	}, searchTicketNotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_ticket_note",
-		Description: "Create a new note on a ticket.",
+		Description: "Add a note to a service ticket from a description body, with optional title, note type, and publish scope that controls internal versus client visibility. Requires ticketId and description; returns the created note including its new ID. To read existing ticket notes use autotask_search_ticket_notes or autotask_get_ticket_note instead. Writes to Autotask.",
+		Annotations: createTool("Create ticket note"),
 	}, createTicketNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_project_note",
-		Description: "Get a specific note for a project by note ID.",
+		Description: "Retrieve one project note by its numeric note ID, returning the note title, body, and type recorded against a project. Use autotask_search_project_notes to list every note on a project when you do not yet know the note ID. Read-only.",
+		Annotations: readOnlyTool("Get project note"),
 	}, getProjectNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_project_notes",
-		Description: "List all notes for a project.",
+		Description: "List every note attached to one project, identified by projectId, returning the raw note records for that project. Use this to browse a project's notes, then autotask_get_project_note to fetch a single note once you have its ID. Returns all notes for the project without pagination. Read-only.",
+		Annotations: readOnlyTool("Search project notes"),
 	}, searchProjectNotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_project_note",
-		Description: "Create a new note on a project.",
+		Description: "Add a note to a project from a description body, with optional title and note type. Requires projectId and description; returns the created note including its new ID. To read existing project notes use autotask_search_project_notes or autotask_get_project_note instead. Writes to Autotask.",
+		Annotations: createTool("Create project note"),
 	}, createProjectNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_company_note",
-		Description: "Get a specific note for a company by note ID.",
+		Description: "Retrieve one company note by its numeric note ID, returning the note name, body, and action type recorded against a company account. Use autotask_search_company_notes to list every note on a company when you do not yet know the note ID. Read-only.",
+		Annotations: readOnlyTool("Get company note"),
 	}, getCompanyNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_company_notes",
-		Description: "List all notes for a company.",
+		Description: "List every note attached to one company account, identified by companyId, returning the raw note records for that company. Use this to browse a company's notes, then autotask_get_company_note to fetch a single note once you have its ID. Returns all notes for the company without pagination. Read-only.",
+		Annotations: readOnlyTool("Search company notes"),
 	}, searchCompanyNotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_company_note",
-		Description: "Create a new note on a company.",
+		Description: "Add a note to a company account from a description body, with optional title and action type. Requires companyId and description; returns the created note including its new ID. To read existing company notes use autotask_search_company_notes or autotask_get_company_note instead. Writes to Autotask.",
+		Annotations: createTool("Create company note"),
 	}, createCompanyNoteHandler(client))
 }
 

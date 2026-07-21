@@ -16,9 +16,9 @@ type GetExpenseReportInput struct {
 
 // SearchExpenseReportsInput defines the input parameters for searching expense reports.
 type SearchExpenseReportsInput struct {
-	SubmitterID int64  `json:"submitterId,omitempty" jsonschema:"Filter by submitter resource ID"`
-	Status      int    `json:"status,omitempty" jsonschema:"Filter by report status"`
-	PageSize    int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	SubmitterID int64 `json:"submitterId,omitempty" jsonschema:"Filter by submitter resource ID"`
+	Status      int   `json:"status,omitempty" jsonschema:"Filter by report status"`
+	PageSize    int   `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
 }
 
 // CreateExpenseReportInput defines the input parameters for creating an expense report.
@@ -46,22 +46,26 @@ type CreateExpenseItemInput struct {
 func RegisterExpenseTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_expense_report",
-		Description: "Get a specific expense report by ID.",
+		Description: "Retrieve one expense report by its numeric reportId, returning its full field set. Use this to fetch a single known report; to locate reports by submitter or status use autotask_search_expense_reports instead. Read-only.",
+		Annotations: readOnlyTool("Get expense report"),
 	}, getExpenseReportHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_expense_reports",
-		Description: "Search for expense reports in Autotask.",
+		Description: "Find expense reports filtered by submitter resource or status, returning up to pageSize records (default 25, max 500). Use this to locate reports, then autotask_get_expense_report for one report by ID. Read-only.",
+		Annotations: readOnlyTool("Search expense reports"),
 	}, searchExpenseReportsHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_expense_report",
-		Description: "Create a new expense report.",
+		Description: "Create the header of an expense report (its name, submitter, and week-ending date) that acts as the container for expense line items. Requires name, submitterId, and weekEndingDate; returns the created report including its new ID. Add individual expenses to it with autotask_create_expense_item. Writes to Autotask.",
+		Annotations: createTool("Create expense report"),
 	}, createExpenseReportHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_expense_item",
-		Description: "Create a new expense item within an expense report.",
+		Description: "Add one expense line item (amount, category, date, and description) to an existing expense report identified by expenseReportId, with optional billing company, receipt, reimbursable, and payment-type fields. Requires expenseReportId, description, expenseDate, expenseCategory, and amount; the report must already exist, so create it first with autotask_create_expense_report. Writes to Autotask.",
+		Annotations: createTool("Create expense item"),
 	}, createExpenseItemHandler(client))
 }
 

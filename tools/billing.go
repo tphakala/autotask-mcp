@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
-	"github.com/tphakala/autotask-mcp/services"
 )
 
 // GetBillingItemInput defines the input parameters for getting a billing item.
@@ -43,17 +43,20 @@ type SearchBillingItemApprovalLevelsInput struct {
 func RegisterBillingTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_billing_item",
-		Description: "Get a specific billing item by ID.",
+		Description: "Retrieve one billing item by its numeric billingItemId, returning its full field set. Use this to fetch a single known item; to find items by company, ticket, project, contract, invoice, or posted-date range use autotask_search_billing_items instead. Read-only.",
+		Annotations: readOnlyTool("Get billing item"),
 	}, getBillingItemHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_billing_items",
-		Description: "Search for billing items in Autotask.",
+		Description: "Find billing items by company, ticket, project, contract, invoice, or posted-date range, returning a compact paginated summary (25 per page, max 500). Use this to locate billing items, then autotask_get_billing_item for the full field set of one item. Read-only.",
+		Annotations: readOnlyTool("Search billing items"),
 	}, searchBillingItemsHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_billing_item_approval_levels",
-		Description: "Search for billing item approval levels in Autotask.",
+		Description: "Find billing-item approval-level records by time entry, approving resource, approval level, or approved-date range, returning a compact paginated summary (25 per page, max 500). These are the approval-chain entries, not billing items themselves; use autotask_search_billing_items for the billing items. Read-only.",
+		Annotations: readOnlyTool("Search billing item approval levels"),
 	}, searchBillingItemApprovalLevelsHandler(client))
 }
 

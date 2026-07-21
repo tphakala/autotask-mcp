@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
-	"github.com/tphakala/autotask-mcp/services"
 )
 
 // SearchTasksInput defines the input parameters for searching tasks.
@@ -22,26 +22,28 @@ type SearchTasksInput struct {
 
 // CreateTaskInput defines the input parameters for creating a new task.
 type CreateTaskInput struct {
-	ProjectID          int64   `json:"projectID" jsonschema:"Project ID"`
-	Title              string  `json:"title" jsonschema:"Task title"`
-	Status             int     `json:"status" jsonschema:"Task status (1=New, 2=In Progress, 5=Complete)"`
-	Description        string  `json:"description,omitempty" jsonschema:"Task description"`
-	AssignedResourceID int64   `json:"assignedResourceID,omitempty" jsonschema:"Assigned resource ID"`
+	ProjectID          int64    `json:"projectID" jsonschema:"Project ID"`
+	Title              string   `json:"title" jsonschema:"Task title"`
+	Status             int      `json:"status" jsonschema:"Task status (1=New, 2=In Progress, 5=Complete)"`
+	Description        string   `json:"description,omitempty" jsonschema:"Task description"`
+	AssignedResourceID int64    `json:"assignedResourceID,omitempty" jsonschema:"Assigned resource ID"`
 	EstimatedHours     *float64 `json:"estimatedHours,omitempty" jsonschema:"Estimated hours"`
-	StartDateTime      string  `json:"startDateTime,omitempty" jsonschema:"Start date/time (ISO format)"`
-	EndDateTime        string  `json:"endDateTime,omitempty" jsonschema:"End date/time (ISO format)"`
+	StartDateTime      string   `json:"startDateTime,omitempty" jsonschema:"Start date/time (ISO format)"`
+	EndDateTime        string   `json:"endDateTime,omitempty" jsonschema:"End date/time (ISO format)"`
 }
 
 // RegisterTaskTools registers all task-related MCP tools with the server.
 func RegisterTaskTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_tasks",
-		Description: "Search for project tasks in Autotask. Returns 25 results per page by default.",
+		Description: "Find project tasks by title substring, parent project ID, status, or assigned resource, returning a compact paginated summary (25 per page, max 100). Use this to locate tasks within a project; to add a new task use autotask_create_task instead. Returns tasks of every status when no status filter is given, including completed tasks. Read-only.",
+		Annotations: readOnlyTool("Search tasks"),
 	}, searchTasksHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_task",
-		Description: "Create a new project task in Autotask.",
+		Description: "Add a task to an existing project from a title and status, with optional description, resource assignment, estimated hours, and start and end dates. Requires projectID, title, and status (1=New, 2=In Progress, 5=Complete); returns the created task including its new ID. To find existing tasks use autotask_search_tasks instead. Writes to Autotask.",
+		Annotations: createTool("Create task"),
 	}, createTaskHandler(client))
 }
 

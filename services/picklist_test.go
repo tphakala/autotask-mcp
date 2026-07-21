@@ -63,7 +63,7 @@ func TestGetFields_CacheHit(t *testing.T) {
 		t.Fatalf("first call error: %v", err)
 	}
 
-	// Second call — should hit cache
+	// Second call should hit cache
 	fields2, err := cache.GetFields(context.Background(), "Tickets")
 	if err != nil {
 		t.Fatalf("second call error: %v", err)
@@ -122,7 +122,7 @@ func TestGetPicklistValues_FieldNotFound(t *testing.T) {
 }
 
 func TestGetFields_APIError(t *testing.T) {
-	// No fixture — will get a 404 or similar error
+	// No fixture, so this gets a 404 or similar error
 	client := autotasktest.NewMockClient(t)
 	cache := NewPicklistCache(client)
 

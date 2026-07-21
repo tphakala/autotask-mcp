@@ -49,32 +49,38 @@ type SearchServiceBundlesInput struct {
 func RegisterSalesTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_product",
-		Description: "Get a specific product by ID.",
+		Description: "Retrieve one catalog product by its numeric ID, returning the full field set. A product is a one-off sellable item such as hardware, a software license, or materials. Use when you already have a product ID; to find products by name or active status use autotask_search_products instead. Read-only.",
+		Annotations: readOnlyTool("Get product"),
 	}, getProductHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_products",
-		Description: "Search for products in Autotask.",
+		Description: "Find catalog products (one-off sellable items such as hardware, licenses, or materials) by name substring and active status, returning up to 25 per page (max 500). Use this to locate a product, then autotask_get_product for the full field set of one by ID. Distinct from autotask_search_services, which lists recurring billable services rather than one-off products. Read-only.",
+		Annotations: readOnlyTool("Search products"),
 	}, searchProductsHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_service",
-		Description: "Get a specific service by ID.",
+		Description: "Retrieve one catalog service by its numeric ID, returning the full field set. A service is a recurring, periodically billed offering, unlike a one-off product. Use when you already have a service ID; to find services by name or active status use autotask_search_services instead. Read-only.",
+		Annotations: readOnlyTool("Get service"),
 	}, getServiceHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_services",
-		Description: "Search for services in Autotask.",
+		Description: "Find recurring billable services by name substring and active status, returning up to 25 per page (max 500). Services are periodically billed offerings, unlike one-off products (autotask_search_products) or grouped service bundles (autotask_search_service_bundles). Use this to locate a service, then autotask_get_service for the full field set of one by ID. Read-only.",
+		Annotations: readOnlyTool("Search services"),
 	}, searchServicesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_service_bundle",
-		Description: "Get a specific service bundle by ID.",
+		Description: "Retrieve one service bundle by its numeric ID, returning the full field set. A service bundle groups several individual services sold together as a single line item. Use when you already have a bundle ID; to find bundles by name or active status use autotask_search_service_bundles instead. Read-only.",
+		Annotations: readOnlyTool("Get service bundle"),
 	}, getServiceBundleHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_service_bundles",
-		Description: "Search for service bundles in Autotask.",
+		Description: "Find service bundles (groups of individual services sold together as one line item) by name substring and active status, returning up to 25 per page (max 500). Use this to locate a bundle, then autotask_get_service_bundle for the full field set of one by ID; for the individual services that make up bundles see autotask_search_services. Read-only.",
+		Annotations: readOnlyTool("Search service bundles"),
 	}, searchServiceBundlesHandler(client))
 }
 

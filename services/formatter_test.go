@@ -46,7 +46,7 @@ func TestFormatCompactResponse_StripsNonSummaryFields(t *testing.T) {
 }
 
 func TestFormatCompactResponse_HasMoreTrue(t *testing.T) {
-	// Fill items equal to pageSize — HasMore should be true
+	// Fill items equal to pageSize; HasMore should be true
 	pageSize := 3
 	items := make([]map[string]any, pageSize)
 	for i := range items {
@@ -65,7 +65,7 @@ func TestFormatCompactResponse_HasMoreTrue(t *testing.T) {
 }
 
 func TestFormatCompactResponse_HasMoreFalse(t *testing.T) {
-	// items < pageSize — HasMore should be false
+	// items < pageSize, so HasMore should be false
 	items := []map[string]any{
 		{"id": float64(1)},
 	}
