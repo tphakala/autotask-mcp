@@ -1,6 +1,6 @@
 module github.com/tphakala/autotask-mcp
 
-go 1.26.1
+go 1.26.5
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.6.1
