@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -11,9 +12,10 @@ import (
 // TestTDQS_ToolDefinitionsQuality asserts, across every registered tool, the
 // invariants that keep the server's Tool Definition Quality Score in tier A:
 // a substantive description, annotations carrying a title, a trailing
-// read/write marker consistent with the readOnly hint, and no em or en dashes.
-// It exercises the real tools/list path over the in-memory transport, so it
-// also confirms annotations serialize end to end.
+// read/write marker consistent with the readOnly hint, every input parameter
+// carrying a schema description, and no em or en dashes. It exercises the real
+// tools/list path over the in-memory transport, so it also confirms
+// annotations and the input schema serialize end to end.
 func TestTDQS_ToolDefinitionsQuality(t *testing.T) {
 	ctx := context.Background()
 	_, client := autotasktest.NewServer(t)
@@ -46,6 +48,27 @@ func TestTDQS_ToolDefinitionsQuality(t *testing.T) {
 		for _, s := range []string{tool.Description, tool.Annotations.Title} {
 			if strings.ContainsRune(s, emDash) || strings.ContainsRune(s, enDash) {
 				t.Errorf("%s: contains em/en dash: %q", name, s)
+			}
+		}
+
+		// Parameter Semantics (TDQS): every declared input parameter must carry a
+		// description, so the schema conveys meaning beyond the bare field name.
+		// InputSchema arrives as decoded JSON over the tools/list path, so parse
+		// it generically rather than depending on the server-side struct type.
+		var schema struct {
+			Properties map[string]struct {
+				Description string `json:"description"`
+			} `json:"properties"`
+		}
+		if raw, err := json.Marshal(tool.InputSchema); err != nil {
+			t.Errorf("%s: cannot marshal input schema: %v", name, err)
+		} else if err := json.Unmarshal(raw, &schema); err != nil {
+			t.Errorf("%s: cannot parse input schema: %v", name, err)
+		} else {
+			for pname, p := range schema.Properties {
+				if strings.TrimSpace(p.Description) == "" {
+					t.Errorf("%s: parameter %q lacks a schema description", name, pname)
+				}
 			}
 		}
 
