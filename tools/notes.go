@@ -2,7 +2,8 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -72,11 +73,21 @@ const maxNoteSummaryLength = 500
 
 func truncateNoteBody(m map[string]any) {
 	for _, field := range []string{"description", "note"} {
-		if val, ok := m[field].(string); ok {
-			runes := []rune(val)
-			if len(runes) > maxNoteSummaryLength {
-				m[field] = string(runes[:maxNoteSummaryLength]) + "\n... [truncated for search, use get note tool for full text]"
+		val, ok := m[field].(string)
+		if !ok || len(val) <= maxNoteSummaryLength {
+			continue
+		}
+		count := 0
+		byteIdx := len(val)
+		for i := range val {
+			if count == maxNoteSummaryLength {
+				byteIdx = i
+				break
 			}
+			count++
+		}
+		if byteIdx < len(val) {
+			m[field] = val[:byteIdx] + "\n... [truncated for search, use get note tool for full text]"
 		}
 	}
 }
@@ -91,31 +102,31 @@ func RegisterNoteTools(s *mcp.Server, client *autotask.Client) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_ticket_notes",
-		Description: "List notes attached to one service ticket by ticketId, returning up to maxResults note records (default 25, max 100) with bodies bounded to prevent context explosion. Read-only.",
+		Description: "List note headers and truncated bodies (first 500 characters) for a ticket, returning a compact summary capped at maxResults (default 25, max 100). Use this to scan a ticket history; use autotask_get_ticket_note for full text. Requires ticketId. Read-only.",
 		Annotations: readOnlyTool("Search ticket notes"),
 	}, searchTicketNotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_ticket_note",
-		Description: "Add a note to a service ticket from a description body, with optional title, note type, and publish scope that controls internal versus client visibility. Requires ticketId and description; returns the created note including its new ID. To read existing ticket notes use autotask_search_ticket_notes or autotask_get_ticket_note instead. Writes to Autotask.",
+		Description: "Add a note to an existing ticket from a title and description, with optional noteType and publish scope. Requires ticketId and description. Writes to Autotask.",
 		Annotations: createTool("Create ticket note"),
 	}, createTicketNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_project_note",
-		Description: "Retrieve one project note by its numeric note ID, returning the complete note title, body, and type recorded against a project. Read-only.",
+		Description: "Retrieve one project note by its numeric note ID, returning the complete note title, description, and type recorded against a project. Read-only.",
 		Annotations: readOnlyTool("Get project note"),
 	}, getProjectNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_project_notes",
-		Description: "List notes attached to one project by projectId, returning up to maxResults note records (default 25, max 100) with bodies bounded to prevent context explosion. Read-only.",
+		Description: "List note headers and truncated descriptions (first 500 characters) for a project, returning a compact summary capped at maxResults (default 25, max 100). Use autotask_get_project_note for full text. Requires projectId. Read-only.",
 		Annotations: readOnlyTool("Search project notes"),
 	}, searchProjectNotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_project_note",
-		Description: "Add a note to a project from a description body, with optional title and note type. Requires projectId and description; returns the created note including its new ID. To read existing project notes use autotask_search_project_notes or autotask_get_project_note instead. Writes to Autotask.",
+		Description: "Add a note to an existing project from a description and optional title and noteType. Requires projectId and description. Writes to Autotask.",
 		Annotations: createTool("Create project note"),
 	}, createProjectNoteHandler(client))
 
@@ -127,59 +138,59 @@ func RegisterNoteTools(s *mcp.Server, client *autotask.Client) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_company_notes",
-		Description: "List notes attached to one company account by companyId, returning up to maxResults note records (default 25, max 100) with bodies bounded to prevent context explosion. Read-only.",
+		Description: "List note headers and truncated bodies (first 500 characters) for a company, returning a compact summary capped at maxResults (default 25, max 100). Use autotask_get_company_note for full text. Requires companyId. Read-only.",
 		Annotations: readOnlyTool("Search company notes"),
 	}, searchCompanyNotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_create_company_note",
-		Description: "Add a note to a company account from a description body, with optional title and action type. Requires companyId and description; returns the created note including its new ID. To read existing company notes use autotask_search_company_notes or autotask_get_company_note instead. Writes to Autotask.",
+		Description: "Add a note to an existing company account from a description (body) and optional title (name) and actionType. Requires companyId and description. Writes to Autotask.",
 		Annotations: createTool("Create company note"),
 	}, createCompanyNoteHandler(client))
 }
 
 // getTicketNoteHandler returns a handler that retrieves a single ticket note by ID.
-func getTicketNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketNoteInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketNoteInput) (*mcp.CallToolResult, any, error) {
+func getTicketNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketNoteInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		note, err := autotask.Get[entities.TicketNote](ctx, client, in.NoteID)
 		if err != nil {
-			return errorResult("failed to get ticket note %d: %v", in.NoteID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(note)
 		if err != nil {
-			return errorResult("failed to convert ticket note: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal ticket note: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchTicketNotesHandler returns a handler that lists notes for a ticket.
-func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketNotesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketNotesInput) (*mcp.CallToolResult, any, error) {
+func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		notes, err := autotask.ListChild[entities.Ticket, entities.TicketNote](ctx, client, in.TicketID)
 		if err != nil {
-			return errorResult("failed to list ticket notes for ticket %d: %v", in.TicketID, err)
+			var notFound *autotask.NotFoundError
+			if errors.As(err, &notFound) {
+				return emptySearchResult()
+			}
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(notes) == 0 {
-			return textResult("No ticket notes found")
+			return emptySearchResult()
 		}
 
 		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		hasMore := len(notes) >= maxResults && maxResults > 0
 		if len(notes) > maxResults {
 			notes = notes[:maxResults]
 		}
 
 		maps, err := entitiesToMaps(notes)
 		if err != nil {
-			return errorResult("failed to convert ticket notes: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		for _, m := range maps {
@@ -187,20 +198,28 @@ func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context,
 			services.FrameUntrustedMapFields(m)
 		}
 
-		data, err := json.MarshalIndent(maps, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal ticket notes: %v", err)
+		hint := ""
+		if hasMore {
+			hint = "Maximum result limit reached. Use narrower search filters to find specific records."
 		}
 
-		return textResult("%s", string(data))
+		return nil, services.CompactResponse{
+			Summary: services.CompactSummary{
+				Returned:   len(maps),
+				HasMore:    hasMore,
+				MaxResults: maxResults,
+				Hint:       hint,
+			},
+			Items: maps,
+		}, nil
 	}
 }
 
 // createTicketNoteHandler returns a handler that creates a new note on a ticket.
-func createTicketNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketNoteInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketNoteInput) (*mcp.CallToolResult, any, error) {
+func createTicketNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketNoteInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		if in.Description == "" {
-			return errorResult("description is required")
+			return nil, nil, fmt.Errorf("description is required")
 		}
 		note := &entities.TicketNote{
 			Description: autotask.Set(in.Description),
@@ -218,58 +237,53 @@ func createTicketNoteHandler(client *autotask.Client) func(ctx context.Context, 
 
 		created, err := autotask.CreateChild[entities.Ticket, entities.TicketNote](ctx, client, in.TicketID, note)
 		if err != nil {
-			return errorResult("failed to create ticket note: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created ticket note: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created ticket note: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // getProjectNoteHandler returns a handler that retrieves a single project note by ID.
-func getProjectNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetProjectNoteInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetProjectNoteInput) (*mcp.CallToolResult, any, error) {
+func getProjectNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetProjectNoteInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetProjectNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		note, err := autotask.Get[entities.ProjectNote](ctx, client, in.NoteID)
 		if err != nil {
-			return errorResult("failed to get project note %d: %v", in.NoteID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(note)
 		if err != nil {
-			return errorResult("failed to convert project note: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal project note: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchProjectNotesHandler returns a handler that lists notes for a project.
-func searchProjectNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectNotesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectNotesInput) (*mcp.CallToolResult, any, error) {
+func searchProjectNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		notes, err := autotask.ListChildRaw(ctx, client, "Projects", in.ProjectID, "ProjectNotes")
 		if err != nil {
-			return errorResult("failed to list project notes for project %d: %v", in.ProjectID, err)
+			var notFound *autotask.NotFoundError
+			if errors.As(err, &notFound) {
+				return emptySearchResult()
+			}
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(notes) == 0 {
-			return textResult("No project notes found")
+			return emptySearchResult()
 		}
 
 		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		hasMore := len(notes) >= maxResults && maxResults > 0
 		if len(notes) > maxResults {
 			notes = notes[:maxResults]
 		}
@@ -279,20 +293,28 @@ func searchProjectNotesHandler(client *autotask.Client) func(ctx context.Context
 			services.FrameUntrustedMapFields(m)
 		}
 
-		data, err := json.MarshalIndent(notes, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal project notes: %v", err)
+		hint := ""
+		if hasMore {
+			hint = "Maximum result limit reached. Use narrower search filters to find specific records."
 		}
 
-		return textResult("%s", string(data))
+		return nil, services.CompactResponse{
+			Summary: services.CompactSummary{
+				Returned:   len(notes),
+				HasMore:    hasMore,
+				MaxResults: maxResults,
+				Hint:       hint,
+			},
+			Items: notes,
+		}, nil
 	}
 }
 
 // createProjectNoteHandler returns a handler that creates a new note on a project.
-func createProjectNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectNoteInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectNoteInput) (*mcp.CallToolResult, any, error) {
+func createProjectNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectNoteInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		if in.Description == "" {
-			return errorResult("description is required")
+			return nil, nil, fmt.Errorf("description is required")
 		}
 		note := &entities.ProjectNote{
 			Description: autotask.Set(in.Description),
@@ -306,57 +328,53 @@ func createProjectNoteHandler(client *autotask.Client) func(ctx context.Context,
 
 		created, err := autotask.CreateChild[entities.Project, entities.ProjectNote](ctx, client, in.ProjectID, note)
 		if err != nil {
-			return errorResult("failed to create project note: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created project note: %v", err)
-		}
-		out, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created project note: %v", err)
+			return nil, nil, err
 		}
 
-		return textResult("%s", string(out))
+		return nil, m, nil
 	}
 }
 
 // getCompanyNoteHandler returns a handler that retrieves a single company note by ID.
-func getCompanyNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetCompanyNoteInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetCompanyNoteInput) (*mcp.CallToolResult, any, error) {
+func getCompanyNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetCompanyNoteInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetCompanyNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		note, err := autotask.Get[entities.CompanyNote](ctx, client, in.NoteID)
 		if err != nil {
-			return errorResult("failed to get company note %d: %v", in.NoteID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(note)
 		if err != nil {
-			return errorResult("failed to convert company note: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal company note: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchCompanyNotesHandler returns a handler that lists notes for a company.
-func searchCompanyNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompanyNotesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompanyNotesInput) (*mcp.CallToolResult, any, error) {
+func searchCompanyNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompanyNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompanyNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		notes, err := autotask.ListChildRaw(ctx, client, "Companies", in.CompanyID, "CompanyNotes")
 		if err != nil {
-			return errorResult("failed to list company notes for company %d: %v", in.CompanyID, err)
+			var notFound *autotask.NotFoundError
+			if errors.As(err, &notFound) {
+				return emptySearchResult()
+			}
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(notes) == 0 {
-			return textResult("No company notes found")
+			return emptySearchResult()
 		}
 
 		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		hasMore := len(notes) >= maxResults && maxResults > 0
 		if len(notes) > maxResults {
 			notes = notes[:maxResults]
 		}
@@ -366,24 +384,32 @@ func searchCompanyNotesHandler(client *autotask.Client) func(ctx context.Context
 			services.FrameUntrustedMapFields(m)
 		}
 
-		data, err := json.MarshalIndent(notes, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal company notes: %v", err)
+		hint := ""
+		if hasMore {
+			hint = "Maximum result limit reached. Use narrower search filters to find specific records."
 		}
 
-		return textResult("%s", string(data))
+		return nil, services.CompactResponse{
+			Summary: services.CompactSummary{
+				Returned:   len(notes),
+				HasMore:    hasMore,
+				MaxResults: maxResults,
+				Hint:       hint,
+			},
+			Items: notes,
+		}, nil
 	}
 }
 
 // createCompanyNoteHandler returns a handler that creates a new note on a company.
-func createCompanyNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyNoteInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyNoteInput) (*mcp.CallToolResult, any, error) {
+func createCompanyNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyNoteInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		if in.Description == "" {
-			return errorResult("description is required")
+			return nil, nil, fmt.Errorf("description is required")
 		}
 		// CompanyNote uses different field names than TicketNote/ProjectNote:
-		// Input.Description → entity.Note (body text)
-		// Input.Title → entity.Name (display name)
+		// Input.Description -> entity.Note (body text)
+		// Input.Title -> entity.Name (display name)
 		note := &entities.CompanyNote{
 			Note: autotask.Set(in.Description),
 		}
@@ -396,18 +422,14 @@ func createCompanyNoteHandler(client *autotask.Client) func(ctx context.Context,
 
 		created, err := autotask.CreateChild[entities.Company, entities.CompanyNote](ctx, client, in.CompanyID, note)
 		if err != nil {
-			return errorResult("failed to create company note: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created company note: %v", err)
-		}
-		out, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created company note: %v", err)
+			return nil, nil, err
 		}
 
-		return textResult("%s", string(out))
+		return nil, m, nil
 	}
 }

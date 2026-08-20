@@ -2,8 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -17,39 +15,25 @@ func TestRegisterLazyTools_DoesNotPanic(t *testing.T) {
 	picklist := services.NewPicklistCache(client)
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "v0.0.1"}, nil)
 
-	// Should not panic.
 	RegisterLazyTools(s, client, mapper, picklist)
 }
 
 func TestListCategories_ReturnsExpectedCategories(t *testing.T) {
-	handler := listCategoriesHandler()
+	cs, _ := setupLazyWireTest(t)
+	ctx := context.Background()
 
-	result, _, err := handler(context.Background(), nil, ListCategoriesInput{})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "autotask_list_categories",
+		Arguments: map[string]any{},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire error: %v", err)
 	}
 	if result.IsError {
-		t.Error("expected IsError=false")
-	}
-	if len(result.Content) == 0 {
-		t.Fatal("expected at least one content item")
+		t.Fatalf("expected IsError=false, got: %v", result.Content)
 	}
 
-	textContent, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-
-	// Parse the JSON response.
-	var categories map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &categories); err != nil {
-		t.Fatalf("failed to parse response JSON: %v", err)
-	}
-
-	// Check all expected categories are present.
+	categories := parseStructuredContent[map[string]CategorySummary](t, result)
 	expectedCategories := []string{
 		"utility", "companies", "contacts", "tickets", "projects",
 		"time_and_billing", "financial", "products_and_services",
@@ -67,7 +51,6 @@ func TestListCategories_ToolCategoriesMap(t *testing.T) {
 		t.Fatal("ToolCategories should not be empty")
 	}
 
-	// Verify tickets category has expected tools.
 	ticketsCat, ok := ToolCategories["tickets"]
 	if !ok {
 		t.Fatal("expected tickets category")
@@ -75,7 +58,6 @@ func TestListCategories_ToolCategoriesMap(t *testing.T) {
 	if len(ticketsCat.Tools) == 0 {
 		t.Error("tickets category should have tools")
 	}
-	// Check that autotask_search_tickets is in there.
 	found := false
 	for _, tool := range ticketsCat.Tools {
 		if tool == "autotask_search_tickets" {
@@ -89,41 +71,43 @@ func TestListCategories_ToolCategoriesMap(t *testing.T) {
 }
 
 func TestListCategoryTools_KnownCategory(t *testing.T) {
-	handler := listCategoryToolsHandler()
+	cs, _ := setupLazyWireTest(t)
+	ctx := context.Background()
 
-	result, _, err := handler(context.Background(), nil, ListCategoryToolsInput{Category: "tickets"})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_list_category_tools",
+		Arguments: map[string]any{
+			"category": "tickets",
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil || result.IsError {
-		t.Fatal("expected successful result")
-	}
-
-	textContent, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
+	if result.IsError {
+		t.Fatalf("expected successful result, got: %v", result)
 	}
 
-	var resp map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &resp); err != nil {
-		t.Fatalf("failed to parse response: %v", err)
+	resp := parseStructuredContent[CategoryToolsOut](t, result)
+	if resp.Category != "tickets" {
+		t.Errorf("expected category=tickets, got %v", resp.Category)
 	}
-
-	if resp["category"] != "tickets" {
-		t.Errorf("expected category=tickets, got %v", resp["category"])
-	}
-	tools, ok := resp["tools"].([]any)
-	if !ok || len(tools) == 0 {
+	if len(resp.Tools) == 0 {
 		t.Error("expected non-empty tools array")
 	}
 }
 
 func TestListCategoryTools_UnknownCategory(t *testing.T) {
-	handler := listCategoryToolsHandler()
+	cs, _ := setupLazyWireTest(t)
+	ctx := context.Background()
 
-	result, _, err := handler(context.Background(), nil, ListCategoryToolsInput{Category: "nonexistent_category_xyz"})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_list_category_tools",
+		Arguments: map[string]any{
+			"category": "nonexistent_category_xyz",
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for unknown category")
@@ -132,68 +116,59 @@ func TestListCategoryTools_UnknownCategory(t *testing.T) {
 
 func TestExecuteTool_DispatchesRealTool(t *testing.T) {
 	ticket := autotasktest.TicketFixture()
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(ticket))
-	mapper := services.NewMappingCache(client)
-	picklist := services.NewPicklistCache(client)
-	dispatcher := buildToolDispatcher(client, mapper, picklist)
+	cs, _ := setupLazyWireTest(t, autotasktest.WithEntity(ticket))
+	ctx := context.Background()
 
-	handler := executeToolHandler(dispatcher)
-
-	result, _, err := handler(context.Background(), nil, ExecuteToolInput{
-		ToolName:  "autotask_search_tickets",
-		Arguments: map[string]any{"maxResults": 10},
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_execute_tool",
+		Arguments: map[string]any{
+			"toolName":  "autotask_search_tickets",
+			"arguments": map[string]any{"maxResults": 10},
+		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil || result.IsError {
+	if result.IsError {
 		t.Fatalf("expected successful execution result, got: %v", result)
 	}
 
-	textContent, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-	if !strings.Contains(textContent.Text, "items") && !strings.Contains(textContent.Text, "ticketNumber") {
-		t.Errorf("expected executed tool result to return ticket data, got: %s", textContent.Text)
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned < 1 {
+		t.Errorf("expected at least 1 returned ticket, got %d", resp.Summary.Returned)
 	}
 }
 
 func TestExecuteTool_UnknownTool(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	mapper := services.NewMappingCache(client)
-	picklist := services.NewPicklistCache(client)
-	dispatcher := buildToolDispatcher(client, mapper, picklist)
+	cs, _ := setupLazyWireTest(t)
+	ctx := context.Background()
 
-	handler := executeToolHandler(dispatcher)
-
-	result, _, err := handler(context.Background(), nil, ExecuteToolInput{
-		ToolName: "nonexistent_tool_name",
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_execute_tool",
+		Arguments: map[string]any{
+			"toolName": "nonexistent_tool_name",
+		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
-	if result == nil || !result.IsError {
+	if !result.IsError {
 		t.Fatal("expected IsError=true for unknown tool")
-	}
-	if len(result.Content) == 0 {
-		t.Fatal("expected at least one content item")
-	}
-	textContent, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-	if !strings.Contains(textContent.Text, "unknown tool") {
-		t.Errorf("expected error message to mention unknown tool, got: %s", textContent.Text)
 	}
 }
 
 func TestExecuteTool_EmptyToolName(t *testing.T) {
-	handler := executeToolHandler(nil)
+	cs, _ := setupLazyWireTest(t)
+	ctx := context.Background()
 
-	result, _, err := handler(context.Background(), nil, ExecuteToolInput{ToolName: ""})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_execute_tool",
+		Arguments: map[string]any{
+			"toolName": "",
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for empty toolName")
@@ -206,17 +181,24 @@ func TestDispatcher_AllCategoryToolsCovered(t *testing.T) {
 	picklist := services.NewPicklistCache(client)
 	dispatcher := buildToolDispatcher(client, mapper, picklist)
 
+	toolCount := 0
 	for catName, cat := range ToolCategories {
+		toolCount += len(cat.Tools)
 		for _, toolName := range cat.Tools {
 			if _, ok := dispatcher[toolName]; !ok {
 				t.Errorf("tool %q in category %q is not covered by dispatcher", toolName, catName)
 			}
 		}
 	}
+
+	if len(dispatcher) != toolCount {
+		t.Errorf("dispatcher has %d tools, but ToolCategories defines %d", len(dispatcher), toolCount)
+	}
 }
 
 func TestRouter_MatchesKeywords(t *testing.T) {
-	handler := routerHandler()
+	cs, _ := setupLazyWireTest(t)
+	ctx := context.Background()
 
 	tests := []struct {
 		intent      string
@@ -230,37 +212,39 @@ func TestRouter_MatchesKeywords(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.intent, func(t *testing.T) {
-			result, _, err := handler(context.Background(), nil, RouterInput{Intent: tt.intent})
+			result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+				Name: "autotask_router",
+				Arguments: map[string]any{
+					"intent": tt.intent,
+				},
+			})
 			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+				t.Fatalf("unexpected wire error: %v", err)
 			}
-			if result == nil || result.IsError {
-				t.Fatal("expected successful result")
-			}
-
-			textContent, ok := result.Content[0].(*mcp.TextContent)
-			if !ok {
-				t.Fatal("expected TextContent")
+			if result.IsError {
+				t.Fatalf("expected successful result, got: %v", result)
 			}
 
-			var resp map[string]any
-			if err := json.Unmarshal([]byte(textContent.Text), &resp); err != nil {
-				t.Fatalf("failed to parse response: %v", err)
-			}
-
-			if resp["suggestedTool"] != tt.expectsTool {
-				t.Errorf("intent %q: expected suggestedTool=%q, got %q", tt.intent, tt.expectsTool, resp["suggestedTool"])
+			resp := parseStructuredContent[RouterOut](t, result)
+			if resp.SuggestedTool != tt.expectsTool {
+				t.Errorf("intent %q: expected suggestedTool=%q, got %q", tt.intent, tt.expectsTool, resp.SuggestedTool)
 			}
 		})
 	}
 }
 
 func TestRouter_EmptyIntent(t *testing.T) {
-	handler := routerHandler()
+	cs, _ := setupLazyWireTest(t)
+	ctx := context.Background()
 
-	result, _, err := handler(context.Background(), nil, RouterInput{Intent: ""})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_router",
+		Arguments: map[string]any{
+			"intent": "",
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for empty intent")
@@ -269,9 +253,7 @@ func TestRouter_EmptyIntent(t *testing.T) {
 
 // TestToolCategories_AllToolsHaveDescriptions ensures every tool listed in
 // ToolCategories has a corresponding entry in toolDescriptions, and vice versa.
-// This prevents drift when tools are added to RegisterAll but not to lazy.go.
 func TestToolCategories_AllToolsHaveDescriptions(t *testing.T) {
-	// Collect all tool names from ToolCategories.
 	categoryTools := map[string]bool{}
 	for _, cat := range ToolCategories {
 		for _, tool := range cat.Tools {
@@ -279,14 +261,12 @@ func TestToolCategories_AllToolsHaveDescriptions(t *testing.T) {
 		}
 	}
 
-	// Every tool in ToolCategories must have a description.
 	for tool := range categoryTools {
 		if _, ok := toolDescriptions[tool]; !ok {
 			t.Errorf("tool %q is in ToolCategories but missing from toolDescriptions", tool)
 		}
 	}
 
-	// Every tool in toolDescriptions must be in some category.
 	for tool := range toolDescriptions {
 		if !categoryTools[tool] {
 			t.Errorf("tool %q is in toolDescriptions but not in any ToolCategories category", tool)
@@ -296,7 +276,7 @@ func TestToolCategories_AllToolsHaveDescriptions(t *testing.T) {
 
 // TestToolCategories_NoDuplicates ensures no tool appears in multiple categories.
 func TestToolCategories_NoDuplicates(t *testing.T) {
-	seen := map[string]string{} // tool → category
+	seen := map[string]string{}
 	for catName, cat := range ToolCategories {
 		for _, tool := range cat.Tools {
 			if prevCat, ok := seen[tool]; ok {
@@ -308,27 +288,25 @@ func TestToolCategories_NoDuplicates(t *testing.T) {
 }
 
 func TestRouter_FallbackToListCategories(t *testing.T) {
-	handler := routerHandler()
+	cs, _ := setupLazyWireTest(t)
+	ctx := context.Background()
 
-	result, _, err := handler(context.Background(), nil, RouterInput{Intent: "xyzzy something completely unknown"})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_router",
+		Arguments: map[string]any{
+			"intent": "xyzzy something completely unknown",
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil || result.IsError {
-		t.Fatal("expected successful result")
-	}
-
-	textContent, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
+	if result.IsError {
+		t.Fatalf("expected successful result, got: %v", result)
 	}
 
-	var resp map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &resp); err != nil {
-		t.Fatalf("failed to parse response: %v", err)
-	}
-
-	if resp["suggestedTool"] != "autotask_list_categories" {
-		t.Errorf("expected fallback to autotask_list_categories, got %v", resp["suggestedTool"])
+	resp := parseStructuredContent[RouterOut](t, result)
+	if resp.SuggestedTool != "autotask_list_categories" {
+		t.Errorf("expected fallback to autotask_list_categories, got %v", resp.SuggestedTool)
 	}
 }
+

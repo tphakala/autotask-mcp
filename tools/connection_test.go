@@ -15,31 +15,45 @@ func TestRegisterConnectionTools_NoPanic(t *testing.T) {
 	RegisterConnectionTools(s, client)
 }
 
-// TestTestConnectionHandler_Success tests that connection succeeds against the mock server.
-func TestTestConnectionHandler_Success(t *testing.T) {
+// TestTestConnectionHandler_Direct tests handler logic directly.
+func TestTestConnectionHandler_Direct(t *testing.T) {
 	_, client := autotasktest.NewServer(t)
 	handler := testConnectionHandler(client)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, struct{}{})
+	res, out, err := handler(ctx, nil, struct{}{})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if res != nil {
+		t.Errorf("expected nil *CallToolResult for SDK inference, got %v", res)
 	}
-	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
-	}
-
-	if len(result.Content) == 0 {
-		t.Fatal("expected content in result")
-	}
-	text, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", result.Content[0])
-	}
-	if text.Text == "" {
-		t.Error("expected non-empty connection result text")
+	if !out.Success || out.Entity != "Tickets" {
+		t.Errorf("unexpected output: %+v", out)
 	}
 }
+
+// TestTestConnectionHandler_Wire tests that connection succeeds against the mock server over wire protocol.
+func TestTestConnectionHandler_Wire(t *testing.T) {
+	cs, _ := setupWireTest(t)
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_test_connection",
+	})
+	if err != nil {
+		t.Fatalf("wire call failed: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected non-error result, got IsError=true; content: %v", result.Content)
+	}
+
+	out := parseStructuredContent[ConnectionStatusOut](t, result)
+	if !out.Success {
+		t.Errorf("expected Success=true, got %v", out.Success)
+	}
+	if out.Entity != "Tickets" {
+		t.Errorf("expected Entity=Tickets, got %q", out.Entity)
+	}
+}
+

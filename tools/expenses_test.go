@@ -2,9 +2,11 @@ package tools
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	"github.com/tphakala/go-autotask/autotasktest"
 )
 
@@ -15,132 +17,146 @@ func TestRegisterExpenseTools_NoPanic(t *testing.T) {
 	RegisterExpenseTools(s, client)
 }
 
-// TestGetExpenseReportHandler_NotFound tests that a missing report returns an error result.
+// TestGetExpenseReportHandler_NotFound tests that a missing report returns an error result over wire.
 func TestGetExpenseReportHandler_NotFound(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := getExpenseReportHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetExpenseReportInput{ReportID: 99999})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_get_expense_report",
+		Arguments: map[string]any{
+			"reportId": 99999,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for missing expense report")
 	}
 }
 
-// TestSearchExpenseReportsHandler_NoResults tests the empty-result case.
+// TestSearchExpenseReportsHandler_NoResults tests the empty-result case over wire.
 func TestSearchExpenseReportsHandler_NoResults(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := searchExpenseReportsHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, SearchExpenseReportsInput{})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "autotask_search_expense_reports",
+		Arguments: map[string]any{},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire error: %v", err)
 	}
 	if result.IsError {
-		t.Errorf("expected no error result for empty search, got IsError=true")
+		t.Errorf("expected no error result for empty search, got IsError=true; content: %v", result.Content)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned != 0 {
+		t.Errorf("expected 0 returned reports, got %d", resp.Summary.Returned)
 	}
 }
 
-// TestCreateExpenseReportHandler_InvalidDate tests that an invalid date returns an error result.
+// TestCreateExpenseReportHandler_InvalidDate tests that an invalid date returns an error result over wire.
 func TestCreateExpenseReportHandler_InvalidDate(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := createExpenseReportHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, CreateExpenseReportInput{
-		Name:           "Test Report",
-		SubmitterID:    5001,
-		WeekEndingDate: "not-a-date",
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_create_expense_report",
+		Arguments: map[string]any{
+			"name":           "Test Report",
+			"submitterId":    5001,
+			"weekEndingDate": "not-a-date",
+		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for invalid date")
 	}
 }
 
-// TestCreateExpenseReportHandler_Success tests that an expense report can be created.
+// TestCreateExpenseReportHandler_Success tests creating an expense report over wire.
 func TestCreateExpenseReportHandler_Success(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := createExpenseReportHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, CreateExpenseReportInput{
-		Name:           "Weekly Expense Report",
-		SubmitterID:    5001,
-		WeekEndingDate: "2024-01-19",
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_create_expense_report",
+		Arguments: map[string]any{
+			"name":           "Weekly Expense Report",
+			"submitterId":    5001,
+			"weekEndingDate": "2024-01-19",
+		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire error: %v", err)
 	}
 	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+		t.Fatalf("expected no error result, got IsError=true; content: %v", result.Content)
+	}
+
+	m := parseStructuredContent[map[string]any](t, result)
+	nameStr, _ := m["name"].(string)
+	if !strings.Contains(nameStr, "Weekly Expense Report") {
+		t.Errorf("expected name to contain 'Weekly Expense Report', got %v", m["name"])
 	}
 }
 
-// TestCreateExpenseItemHandler_InvalidDate tests that an invalid expense date returns an error result.
+// TestCreateExpenseItemHandler_InvalidDate tests that an invalid expense date returns an error result over wire.
 func TestCreateExpenseItemHandler_InvalidDate(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := createExpenseItemHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, CreateExpenseItemInput{
-		ExpenseReportID: 1,
-		Description:     "Lunch",
-		ExpenseDate:     "bad-date",
-		ExpenseCategory: 1,
-		Amount:          15.50,
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_create_expense_item",
+		Arguments: map[string]any{
+			"expenseReportId": 1,
+			"description":     "Lunch",
+			"expenseDate":     "bad-date",
+			"expenseCategory": 1,
+			"amount":          15.50,
+		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for invalid date")
 	}
 }
 
-// TestCreateExpenseItemHandler_Success tests that an expense item can be created.
+// TestCreateExpenseItemHandler_Success tests creating an expense item over wire.
 func TestCreateExpenseItemHandler_Success(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := createExpenseItemHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, CreateExpenseItemInput{
-		ExpenseReportID:     1,
-		Description:         "Team lunch",
-		ExpenseDate:         "2024-01-15",
-		ExpenseCategory:     1,
-		Amount:              45.00,
-		IsBillableToCompany: true,
-		IsReimbursable:      true,
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_create_expense_item",
+		Arguments: map[string]any{
+			"expenseReportId":     1,
+			"description":         "Team lunch",
+			"expenseDate":         "2024-01-15",
+			"expenseCategory":     1,
+			"amount":              45.00,
+			"isBillableToCompany": true,
+			"isReimbursable":      true,
+		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire error: %v", err)
 	}
 	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+		t.Fatalf("expected no error result, got IsError=true; content: %v", result.Content)
+	}
+
+	m := parseStructuredContent[map[string]any](t, result)
+	descStr, _ := m["description"].(string)
+	if !strings.Contains(descStr, "Team lunch") {
+		t.Errorf("expected description to contain 'Team lunch', got %v", m["description"])
 	}
 }
+

@@ -2,7 +2,7 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -38,16 +38,16 @@ func RegisterAttachmentTools(s *mcp.Server, client *autotask.Client) {
 }
 
 // getTicketAttachmentHandler returns a handler that retrieves a single ticket attachment.
-func getTicketAttachmentHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketAttachmentInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketAttachmentInput) (*mcp.CallToolResult, any, error) {
+func getTicketAttachmentHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketAttachmentInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketAttachmentInput) (*mcp.CallToolResult, map[string]any, error) {
 		attachment, err := autotask.Get[entities.TicketAttachment](ctx, client, in.AttachmentID)
 		if err != nil {
-			return errorResult("failed to get ticket attachment %d: %v", in.AttachmentID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(attachment)
 		if err != nil {
-			return errorResult("failed to convert ticket attachment: %v", err)
+			return nil, nil, err
 		}
 
 		delete(m, "fullPath")
@@ -55,28 +55,28 @@ func getTicketAttachmentHandler(client *autotask.Client) func(ctx context.Contex
 			delete(m, "data")
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal ticket attachment: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchTicketAttachmentsHandler returns a handler that lists attachments for a ticket without heavy base64 data.
-func searchTicketAttachmentsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketAttachmentsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketAttachmentsInput) (*mcp.CallToolResult, any, error) {
+func searchTicketAttachmentsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketAttachmentsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketAttachmentsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		attachments, err := autotask.ListChildRaw(ctx, client, "Tickets", in.TicketID, "TicketAttachments")
 		if err != nil {
-			return errorResult("failed to list ticket attachments for ticket %d: %v", in.TicketID, err)
+			var notFound *autotask.NotFoundError
+			if errors.As(err, &notFound) {
+				return emptySearchResult()
+			}
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(attachments) == 0 {
-			return textResult("No ticket attachments found")
+			return emptySearchResult()
 		}
 
 		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		hasMore := len(attachments) >= maxResults && maxResults > 0
 		if len(attachments) > maxResults {
 			attachments = attachments[:maxResults]
 		}
@@ -87,11 +87,19 @@ func searchTicketAttachmentsHandler(client *autotask.Client) func(ctx context.Co
 			services.FrameUntrustedMapFields(attachment)
 		}
 
-		data, err := json.MarshalIndent(attachments, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal ticket attachments: %v", err)
+		hint := ""
+		if hasMore {
+			hint = "Maximum result limit reached. Use narrower search filters to find specific records."
 		}
 
-		return textResult("%s", string(data))
+		return nil, services.CompactResponse{
+			Summary: services.CompactSummary{
+				Returned:   len(attachments),
+				HasMore:    hasMore,
+				MaxResults: maxResults,
+				Hint:       hint,
+			},
+			Items: attachments,
+		}, nil
 	}
 }

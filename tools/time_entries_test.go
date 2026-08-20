@@ -2,10 +2,11 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	"github.com/tphakala/go-autotask/autotasktest"
 )
 
@@ -13,175 +14,137 @@ import (
 // two tools without panicking.
 func TestRegisterTimeEntryTools_NoPanic(t *testing.T) {
 	_, client := autotasktest.NewServer(t)
-	mapper := newTestMapper(client)
+	mapper := services.NewMappingCache(client)
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
 
-	// Should not panic.
 	RegisterTimeEntryTools(s, client, mapper)
 }
 
-// TestSearchTimeEntriesHandler_ReturnsNoEntriesFound tests the empty-result case.
+// TestSearchTimeEntriesHandler_ReturnsNoEntriesFound tests the empty-result case over wire.
 func TestSearchTimeEntriesHandler_ReturnsNoEntriesFound(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	mapper := newTestMapper(client)
-
-	handler := searchTimeEntriesHandler(client, mapper)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, SearchTimeEntriesInput{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true")
-	}
-	if len(result.Content) == 0 {
-		t.Fatal("expected content in result")
-	}
-	text, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", result.Content[0])
-	}
-	if text.Text != "No time entries found" {
-		t.Errorf("expected 'No time entries found', got %q", text.Text)
-	}
-}
-
-// TestSearchTimeEntriesHandler_ReturnsEntries tests that seeded entries are returned.
-func TestSearchTimeEntriesHandler_ReturnsEntries(t *testing.T) {
-	entry := autotasktest.TimeEntryFixture()
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(entry))
-	mapper := newTestMapper(client)
-
-	handler := searchTimeEntriesHandler(client, mapper)
-	ctx := context.Background()
-
-	result, _, err := handler(ctx, nil, SearchTimeEntriesInput{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
-	}
-	if len(result.Content) == 0 {
-		t.Fatal("expected content in result")
-	}
-
-	text, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", result.Content[0])
-	}
-
-	var resp map[string]any
-	if err := json.Unmarshal([]byte(text.Text), &resp); err != nil {
-		t.Fatalf("result is not valid JSON: %v\ncontent: %s", err, text.Text)
-	}
-
-	items, ok := resp["items"].([]any)
-	if !ok {
-		t.Fatalf("expected 'items' array in response, got: %v", resp)
-	}
-	if len(items) == 0 {
-		t.Error("expected at least one time entry in results")
-	}
-}
-
-// TestCreateTimeEntryHandler_Success tests that a time entry can be created.
-func TestCreateTimeEntryHandler_Success(t *testing.T) {
-	_, client := autotasktest.NewServer(t,
-		autotasktest.WithEntity(autotasktest.TimeEntryFixture()),
-	)
-
-	handler := createTimeEntryHandler(client)
-	ctx := context.Background()
-
-	in := CreateTimeEntryInput{
-		ResourceID:   5001,
-		DateWorked:   "2024-01-15",
-		HoursWorked:  2.5,
-		SummaryNotes: "Fixed server issue",
-		TicketID:     3001,
-	}
-
-	result, _, err := handler(ctx, nil, in)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
-	}
-	if len(result.Content) == 0 {
-		t.Fatal("expected content in result")
-	}
-
-	text, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", result.Content[0])
-	}
-
-	var m map[string]any
-	if err := json.Unmarshal([]byte(text.Text), &m); err != nil {
-		t.Fatalf("result is not valid JSON: %v\ncontent: %s", err, text.Text)
-	}
-}
-
-// TestCreateTimeEntryHandler_InvalidDate tests that an invalid date returns an error result.
-func TestCreateTimeEntryHandler_InvalidDate(t *testing.T) {
-	_, client := autotasktest.NewServer(t,
-		autotasktest.WithEntity(autotasktest.TimeEntryFixture()),
-	)
-
-	handler := createTimeEntryHandler(client)
-	ctx := context.Background()
-
-	result, _, err := handler(ctx, nil, CreateTimeEntryInput{
-		ResourceID:   5001,
-		DateWorked:   "not-a-date",
-		HoursWorked:  1.0,
-		SummaryNotes: "test",
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "autotask_search_time_entries",
+		Arguments: map[string]any{},
 	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if result.IsError {
+		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned != 0 {
+		t.Errorf("expected 0 returned entries, got %d", resp.Summary.Returned)
+	}
+	if len(resp.Items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(resp.Items))
+	}
+}
+
+// TestSearchTimeEntriesHandler_ReturnsEntries tests that seeded entries are returned over wire.
+func TestSearchTimeEntriesHandler_ReturnsEntries(t *testing.T) {
+	entry := autotasktest.TimeEntryFixture()
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(entry))
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "autotask_search_time_entries",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire error: %v", err)
+	}
+	if result.IsError {
+		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned < 1 {
+		t.Errorf("expected at least 1 returned time entry, got %d", resp.Summary.Returned)
+	}
+	if len(resp.Items) == 0 {
+		t.Fatal("expected items in response")
+	}
+	if resp.Items[0]["id"] == nil {
+		t.Error("expected time entry to contain 'id' field")
+	}
+}
+
+// TestCreateTimeEntryHandler_Success tests creating a time entry over wire.
+func TestCreateTimeEntryHandler_Success(t *testing.T) {
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.TimeEntryFixture()))
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_create_time_entry",
+		Arguments: map[string]any{
+			"resourceID":   5001,
+			"dateWorked":   "2024-01-15",
+			"hoursWorked":  2.5,
+			"summaryNotes": "Fixed server issue",
+			"ticketID":     3001,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected non-error result, got IsError=true; content: %v", result.Content)
+	}
+
+	m := parseStructuredContent[map[string]any](t, result)
+	notesStr, _ := m["summaryNotes"].(string)
+	if !strings.Contains(notesStr, "Fixed server issue") {
+		t.Errorf("expected summaryNotes to contain 'Fixed server issue', got %v", m["summaryNotes"])
+	}
+}
+
+// TestCreateTimeEntryHandler_InvalidDate tests that an invalid date returns an error result over wire.
+func TestCreateTimeEntryHandler_InvalidDate(t *testing.T) {
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.TimeEntryFixture()))
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_create_time_entry",
+		Arguments: map[string]any{
+			"resourceID":   5001,
+			"dateWorked":   "not-a-date",
+			"hoursWorked":  1.0,
+			"summaryNotes": "test",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for invalid date")
 	}
 }
 
-// TestSearchTimeEntriesHandler_WithFilters verifies that filters can be applied.
+// TestSearchTimeEntriesHandler_WithFilters verifies filters execution over wire.
 func TestSearchTimeEntriesHandler_WithFilters(t *testing.T) {
 	entry := autotasktest.TimeEntryFixture()
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(entry))
-	mapper := newTestMapper(client)
-
-	handler := searchTimeEntriesHandler(client, mapper)
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(entry))
 	ctx := context.Background()
 
-	in := SearchTimeEntriesInput{
-		ResourceID:      5001,
-		TicketID:        3001,
-		DateWorkedAfter: "2024-01-01T00:00:00Z",
-		MaxResults:      10,
-	}
-
-	result, _, err := handler(ctx, nil, in)
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_time_entries",
+		Arguments: map[string]any{
+			"resourceID":      5001,
+			"ticketID":        3001,
+			"dateWorkedAfter": "2024-01-01T00:00:00Z",
+			"maxResults":      10,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if result.IsError {
+		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
 	}
-	_ = result
 }
+

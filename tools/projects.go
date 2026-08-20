@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -45,8 +44,8 @@ func RegisterProjectTools(s *mcp.Server, client *autotask.Client, mapper *servic
 }
 
 // searchProjectsHandler returns a handler that searches projects using the provided filters.
-func searchProjectsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectsInput) (*mcp.CallToolResult, any, error) {
+func searchProjectsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
 
 		q := autotask.NewQuery().Limit(maxResults)
@@ -63,16 +62,16 @@ func searchProjectsHandler(client *autotask.Client, mapper *services.MappingCach
 
 		projects, err := autotask.List[entities.Project](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search projects: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(projects) == 0 {
-			return textResult("No projects found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(projects)
 		if err != nil {
-			return errorResult("failed to convert projects: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, mapper, maps, "autotask_search_projects", maxResults)
@@ -80,8 +79,8 @@ func searchProjectsHandler(client *autotask.Client, mapper *services.MappingCach
 }
 
 // createProjectHandler returns a handler that creates a new project.
-func createProjectHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectInput) (*mcp.CallToolResult, any, error) {
+func createProjectHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectInput) (*mcp.CallToolResult, map[string]any, error) {
 		project := &entities.Project{
 			CompanyID:   autotask.Set(in.CompanyID),
 			ProjectName: autotask.Set(in.ProjectName),
@@ -94,14 +93,14 @@ func createProjectHandler(client *autotask.Client) func(ctx context.Context, req
 		if in.StartDate != "" {
 			t, err := parseDate(in.StartDate)
 			if err != nil {
-				return errorResult("invalid startDate format (expected YYYY-MM-DD or ISO format): %v", err)
+				return nil, nil, err
 			}
 			project.StartDateTime = autotask.Set(t)
 		}
 		if in.EndDate != "" {
 			t, err := parseDate(in.EndDate)
 			if err != nil {
-				return errorResult("invalid endDate format (expected YYYY-MM-DD or ISO format): %v", err)
+				return nil, nil, err
 			}
 			project.EndDateTime = autotask.Set(t)
 		}
@@ -111,19 +110,14 @@ func createProjectHandler(client *autotask.Client) func(ctx context.Context, req
 
 		created, err := autotask.Create[entities.Project](ctx, client, project)
 		if err != nil {
-			return errorResult("failed to create project: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created project: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created project: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }

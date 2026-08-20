@@ -2,7 +2,7 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -229,30 +229,25 @@ func RegisterFinancialTools(s *mcp.Server, client *autotask.Client, mapper *serv
 }
 
 // getQuoteHandler returns a handler that retrieves a single quote.
-func getQuoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteInput) (*mcp.CallToolResult, any, error) {
+func getQuoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		quote, err := autotask.Get[entities.Quote](ctx, client, in.QuoteID)
 		if err != nil {
-			return errorResult("failed to get quote %d: %v", in.QuoteID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(quote)
 		if err != nil {
-			return errorResult("failed to convert quote: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal quote: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchQuotesHandler returns a handler that searches quotes.
-func searchQuotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuotesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuotesInput) (*mcp.CallToolResult, any, error) {
+func searchQuotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -271,30 +266,25 @@ func searchQuotesHandler(client *autotask.Client) func(ctx context.Context, req 
 
 		quotes, err := autotask.List[entities.Quote](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search quotes: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(quotes) == 0 {
-			return textResult("No quotes found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(quotes)
 		if err != nil {
-			return errorResult("failed to convert quotes: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
-		data, err := json.MarshalIndent(maps, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal quotes: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return searchResult(ctx, nil, maps, "autotask_search_quotes", maxResults)
 	}
 }
 
 // createQuoteHandler returns a handler that creates a new quote.
-func createQuoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteInput) (*mcp.CallToolResult, any, error) {
+func createQuoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		entity := &entities.Quote{
 			CompanyID: autotask.Set(in.CompanyID),
 		}
@@ -313,62 +303,52 @@ func createQuoteHandler(client *autotask.Client) func(ctx context.Context, req *
 		if in.EffectiveDate != "" {
 			t, err := parseDate(in.EffectiveDate)
 			if err != nil {
-				return errorResult("invalid effectiveDate format: %v", err)
+				return nil, nil, err
 			}
 			entity.EffectiveDate = autotask.Set(t)
 		}
 		if in.ExpirationDate != "" {
 			t, err := parseDate(in.ExpirationDate)
 			if err != nil {
-				return errorResult("invalid expirationDate format: %v", err)
+				return nil, nil, err
 			}
 			entity.ExpirationDate = autotask.Set(t)
 		}
 
 		created, err := autotask.Create[entities.Quote](ctx, client, entity)
 		if err != nil {
-			return errorResult("failed to create quote: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created quote: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created quote: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // getQuoteItemHandler returns a handler that retrieves a single quote item.
-func getQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteItemInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteItemInput) (*mcp.CallToolResult, any, error) {
+func getQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteItemInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetQuoteItemInput) (*mcp.CallToolResult, map[string]any, error) {
 		item, err := autotask.Get[entities.QuoteItem](ctx, client, in.QuoteItemID)
 		if err != nil {
-			return errorResult("failed to get quote item %d: %v", in.QuoteItemID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(item)
 		if err != nil {
-			return errorResult("failed to convert quote item: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal quote item: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchQuoteItemsHandler returns a handler that searches quote items.
-func searchQuoteItemsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuoteItemsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuoteItemsInput) (*mcp.CallToolResult, any, error) {
+func searchQuoteItemsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuoteItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuoteItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -381,30 +361,25 @@ func searchQuoteItemsHandler(client *autotask.Client) func(ctx context.Context, 
 
 		items, err := autotask.List[entities.QuoteItem](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search quote items: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(items) == 0 {
-			return textResult("No quote items found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(items)
 		if err != nil {
-			return errorResult("failed to convert quote items: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
-		data, err := json.MarshalIndent(maps, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal quote items: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return searchResult(ctx, nil, maps, "autotask_search_quote_items", maxResults)
 	}
 }
 
 // createQuoteItemHandler returns a handler that creates a new quote item.
-func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteItemInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteItemInput) (*mcp.CallToolResult, any, error) {
+func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteItemInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteItemInput) (*mcp.CallToolResult, map[string]any, error) {
 		entity := &entities.QuoteItem{
 			QuoteID:  autotask.Set(in.QuoteID),
 			Quantity: autotask.Set(in.Quantity),
@@ -448,7 +423,6 @@ func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 		}
 
 		// Auto-determine quoteItemType if not provided.
-		// Autotask quote item type constants.
 		const (
 			quoteItemProduct       = 1
 			quoteItemService       = 11
@@ -471,26 +445,21 @@ func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 
 		created, err := autotask.Create[entities.QuoteItem](ctx, client, entity)
 		if err != nil {
-			return errorResult("failed to create quote item: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created quote item: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created quote item: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // updateQuoteItemHandler returns a handler that updates an existing quote item.
-func updateQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in UpdateQuoteItemInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in UpdateQuoteItemInput) (*mcp.CallToolResult, any, error) {
+func updateQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in UpdateQuoteItemInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in UpdateQuoteItemInput) (*mcp.CallToolResult, map[string]any, error) {
 		entity := &entities.QuoteItem{
 			ID: autotask.Set(in.QuoteItemID),
 		}
@@ -519,59 +488,53 @@ func updateQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 
 		updated, err := autotask.Update[entities.QuoteItem](ctx, client, entity)
 		if err != nil {
-			return errorResult("failed to update quote item %d: %v", in.QuoteItemID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(updated)
 		if err != nil {
-			return errorResult("failed to convert updated quote item: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal updated quote item: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // deleteQuoteItemHandler returns a handler that deletes a quote item.
-func deleteQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in DeleteQuoteItemInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in DeleteQuoteItemInput) (*mcp.CallToolResult, any, error) {
+func deleteQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in DeleteQuoteItemInput) (*mcp.CallToolResult, DeleteResultOut, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in DeleteQuoteItemInput) (*mcp.CallToolResult, DeleteResultOut, error) {
 		if err := autotask.Delete[entities.QuoteItem](ctx, client, in.QuoteItemID); err != nil {
-			return errorResult("failed to delete quote item %d: %v", in.QuoteItemID, err)
+			return nil, DeleteResultOut{}, err
 		}
 
-		return textResult("Quote item %d deleted successfully", in.QuoteItemID)
+		return nil, DeleteResultOut{
+			Success: true,
+			ID:      in.QuoteItemID,
+			Message: fmt.Sprintf("Quote item %d deleted successfully", in.QuoteItemID),
+		}, nil
 	}
 }
 
 // getOpportunityHandler returns a handler that retrieves a single opportunity.
-func getOpportunityHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetOpportunityInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetOpportunityInput) (*mcp.CallToolResult, any, error) {
+func getOpportunityHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetOpportunityInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetOpportunityInput) (*mcp.CallToolResult, map[string]any, error) {
 		opp, err := autotask.Get[entities.Opportunity](ctx, client, in.OpportunityID)
 		if err != nil {
-			return errorResult("failed to get opportunity %d: %v", in.OpportunityID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(opp)
 		if err != nil {
-			return errorResult("failed to convert opportunity: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal opportunity: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchOpportunitiesHandler returns a handler that searches opportunities.
-func searchOpportunitiesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchOpportunitiesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchOpportunitiesInput) (*mcp.CallToolResult, any, error) {
+func searchOpportunitiesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchOpportunitiesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchOpportunitiesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -587,37 +550,32 @@ func searchOpportunitiesHandler(client *autotask.Client) func(ctx context.Contex
 
 		opps, err := autotask.List[entities.Opportunity](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search opportunities: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(opps) == 0 {
-			return textResult("No opportunities found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(opps)
 		if err != nil {
-			return errorResult("failed to convert opportunities: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
-		data, err := json.MarshalIndent(maps, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal opportunities: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return searchResult(ctx, nil, maps, "autotask_search_opportunities", maxResults)
 	}
 }
 
 // createOpportunityHandler returns a handler that creates a new opportunity.
-func createOpportunityHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateOpportunityInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateOpportunityInput) (*mcp.CallToolResult, any, error) {
+func createOpportunityHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateOpportunityInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateOpportunityInput) (*mcp.CallToolResult, map[string]any, error) {
 		projectedClose, err := parseDate(in.ProjectedCloseDate)
 		if err != nil {
-			return errorResult("invalid projectedCloseDate format: %v", err)
+			return nil, nil, err
 		}
 		startDate, err := parseDate(in.StartDate)
 		if err != nil {
-			return errorResult("invalid startDate format: %v", err)
+			return nil, nil, err
 		}
 
 		entity := &entities.Opportunity{
@@ -657,26 +615,21 @@ func createOpportunityHandler(client *autotask.Client) func(ctx context.Context,
 
 		created, err := autotask.Create[entities.Opportunity](ctx, client, entity)
 		if err != nil {
-			return errorResult("failed to create opportunity: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created opportunity: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created opportunity: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchInvoicesHandler returns a handler that searches invoices.
-func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchInvoicesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchInvoicesInput) (*mcp.CallToolResult, any, error) {
+func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchInvoicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchInvoicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -692,30 +645,25 @@ func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, re
 
 		invoices, err := autotask.List[entities.Invoice](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search invoices: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(invoices) == 0 {
-			return textResult("No invoices found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(invoices)
 		if err != nil {
-			return errorResult("failed to convert invoices: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
-		data, err := json.MarshalIndent(maps, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal invoices: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return searchResult(ctx, nil, maps, "autotask_search_invoices", maxResults)
 	}
 }
 
 // searchContractsHandler returns a handler that searches contracts.
-func searchContractsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchContractsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchContractsInput) (*mcp.CallToolResult, any, error) {
+func searchContractsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchContractsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchContractsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -731,16 +679,16 @@ func searchContractsHandler(client *autotask.Client, mapper *services.MappingCac
 
 		contracts, err := autotask.List[entities.Contract](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search contracts: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(contracts) == 0 {
-			return textResult("No contracts found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(contracts)
 		if err != nil {
-			return errorResult("failed to convert contracts: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, mapper, maps, "autotask_search_contracts", maxResults)

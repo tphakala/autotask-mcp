@@ -2,9 +2,9 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
 )
@@ -70,30 +70,25 @@ func RegisterExpenseTools(s *mcp.Server, client *autotask.Client) {
 }
 
 // getExpenseReportHandler returns a handler that retrieves a single expense report.
-func getExpenseReportHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetExpenseReportInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetExpenseReportInput) (*mcp.CallToolResult, any, error) {
+func getExpenseReportHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetExpenseReportInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetExpenseReportInput) (*mcp.CallToolResult, map[string]any, error) {
 		report, err := autotask.Get[entities.ExpenseReport](ctx, client, in.ReportID)
 		if err != nil {
-			return errorResult("failed to get expense report %d: %v", in.ReportID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(report)
 		if err != nil {
-			return errorResult("failed to convert expense report: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal expense report: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchExpenseReportsHandler returns a handler that searches expense reports.
-func searchExpenseReportsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchExpenseReportsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchExpenseReportsInput) (*mcp.CallToolResult, any, error) {
+func searchExpenseReportsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchExpenseReportsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchExpenseReportsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -106,33 +101,28 @@ func searchExpenseReportsHandler(client *autotask.Client) func(ctx context.Conte
 
 		reports, err := autotask.List[entities.ExpenseReport](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search expense reports: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(reports) == 0 {
-			return textResult("No expense reports found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(reports)
 		if err != nil {
-			return errorResult("failed to convert expense reports: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
-		data, err := json.MarshalIndent(maps, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal expense reports: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return searchResult(ctx, nil, maps, "autotask_search_expense_reports", maxResults)
 	}
 }
 
 // createExpenseReportHandler returns a handler that creates a new expense report.
-func createExpenseReportHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateExpenseReportInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateExpenseReportInput) (*mcp.CallToolResult, any, error) {
+func createExpenseReportHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateExpenseReportInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateExpenseReportInput) (*mcp.CallToolResult, map[string]any, error) {
 		weekEnding, err := parseDate(in.WeekEndingDate)
 		if err != nil {
-			return errorResult("invalid weekEndingDate format (expected YYYY-MM-DD or ISO format): %v", err)
+			return nil, nil, err
 		}
 
 		entity := &entities.ExpenseReport{
@@ -142,29 +132,24 @@ func createExpenseReportHandler(client *autotask.Client) func(ctx context.Contex
 		}
 		created, err := autotask.Create[entities.ExpenseReport](ctx, client, entity)
 		if err != nil {
-			return errorResult("failed to create expense report: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created expense report: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created expense report: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // createExpenseItemHandler returns a handler that creates a new expense item.
-func createExpenseItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateExpenseItemInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateExpenseItemInput) (*mcp.CallToolResult, any, error) {
+func createExpenseItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateExpenseItemInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateExpenseItemInput) (*mcp.CallToolResult, map[string]any, error) {
 		expenseDate, err := parseDate(in.ExpenseDate)
 		if err != nil {
-			return errorResult("invalid expenseDate format (expected YYYY-MM-DD or ISO format): %v", err)
+			return nil, nil, err
 		}
 
 		entity := &entities.ExpenseItem{
@@ -192,19 +177,14 @@ func createExpenseItemHandler(client *autotask.Client) func(ctx context.Context,
 
 		created, err := autotask.Create[entities.ExpenseItem](ctx, client, entity)
 		if err != nil {
-			return errorResult("failed to create expense item: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created expense item: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created expense item: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -47,8 +46,8 @@ func RegisterTaskTools(s *mcp.Server, client *autotask.Client, mapper *services.
 }
 
 // searchTasksHandler returns a handler that searches tasks using the provided filters.
-func searchTasksHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTasksInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTasksInput) (*mcp.CallToolResult, any, error) {
+func searchTasksHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTasksInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTasksInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
 
 		q := autotask.NewQuery().Limit(maxResults)
@@ -68,16 +67,16 @@ func searchTasksHandler(client *autotask.Client, mapper *services.MappingCache) 
 
 		tasks, err := autotask.List[entities.Task](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search tasks: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(tasks) == 0 {
-			return textResult("No tasks found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(tasks)
 		if err != nil {
-			return errorResult("failed to convert tasks: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, mapper, maps, "autotask_search_tasks", maxResults)
@@ -85,8 +84,8 @@ func searchTasksHandler(client *autotask.Client, mapper *services.MappingCache) 
 }
 
 // createTaskHandler returns a handler that creates a new task.
-func createTaskHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTaskInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTaskInput) (*mcp.CallToolResult, any, error) {
+func createTaskHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTaskInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTaskInput) (*mcp.CallToolResult, map[string]any, error) {
 		task := &entities.Task{
 			ProjectID: autotask.Set(in.ProjectID),
 			Title:     autotask.Set(in.Title),
@@ -105,33 +104,28 @@ func createTaskHandler(client *autotask.Client) func(ctx context.Context, req *m
 		if in.StartDateTime != "" {
 			t, err := parseDate(in.StartDateTime)
 			if err != nil {
-				return errorResult("invalid startDateTime format (expected ISO format): %v", err)
+				return nil, nil, err
 			}
 			task.StartDateTime = autotask.Set(t)
 		}
 		if in.EndDateTime != "" {
 			t, err := parseDate(in.EndDateTime)
 			if err != nil {
-				return errorResult("invalid endDateTime format (expected ISO format): %v", err)
+				return nil, nil, err
 			}
 			task.EndDateTime = autotask.Set(t)
 		}
 
 		created, err := autotask.Create[entities.Task](ctx, client, task)
 		if err != nil {
-			return errorResult("failed to create task: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created task: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created task: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }

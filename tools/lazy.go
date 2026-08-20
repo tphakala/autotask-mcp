@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -175,22 +176,26 @@ type RouterInput struct {
 type ToolRunner func(ctx context.Context, rawArgs map[string]any) (*mcp.CallToolResult, any, error)
 
 // makeRunner converts a typed MCP tool handler into a dynamic ToolRunner.
-func makeRunner[In any](handler func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, any, error)) ToolRunner {
+func makeRunner[In, Out any](handler func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error)) ToolRunner {
 	return func(ctx context.Context, rawArgs map[string]any) (*mcp.CallToolResult, any, error) {
 		if handler == nil {
-			return errorResult("tool handler is not configured")
+			return nil, nil, fmt.Errorf("tool handler is not configured")
 		}
 		var in In
 		if len(rawArgs) > 0 {
 			data, err := json.Marshal(rawArgs)
 			if err != nil {
-				return errorResult("failed to encode tool arguments: %v", err)
+				return nil, nil, fmt.Errorf("failed to encode tool arguments: %w", err)
 			}
 			if err := json.Unmarshal(data, &in); err != nil {
-				return errorResult("failed to decode arguments into target parameter schema: %v", err)
+				return nil, nil, fmt.Errorf("failed to decode arguments into target parameter schema: %w", err)
 			}
 		}
-		return handler(ctx, nil, in)
+		res, out, err := handler(ctx, &mcp.CallToolRequest{}, in)
+		if err != nil {
+			return nil, nil, err
+		}
+		return res, out, nil
 	}
 }
 
@@ -206,6 +211,12 @@ func buildToolDispatcher(client *autotask.Client, mapper *services.MappingCache,
 		"autotask_list_ticket_priorities": makeRunner(listTicketPrioritiesHandler(picklist)),
 		"autotask_get_field_info":         makeRunner(getFieldInfoHandler(picklist)),
 
+		// Tickets
+		"autotask_search_tickets":     makeRunner(searchTicketsHandler(client, mapper)),
+		"autotask_get_ticket_details": makeRunner(getTicketDetailsHandler(client, mapper)),
+		"autotask_create_ticket":      makeRunner(createTicketHandler(client)),
+		"autotask_update_ticket":      makeRunner(updateTicketHandler(client)),
+
 		// Companies
 		"autotask_search_companies": makeRunner(searchCompaniesHandler(client, mapper)),
 		"autotask_create_company":   makeRunner(createCompanyHandler(client)),
@@ -215,13 +226,25 @@ func buildToolDispatcher(client *autotask.Client, mapper *services.MappingCache,
 		"autotask_search_contacts": makeRunner(searchContactsHandler(client, mapper)),
 		"autotask_create_contact":  makeRunner(createContactHandler(client)),
 
-		// Tickets
-		"autotask_search_tickets":     makeRunner(searchTicketsHandler(client, mapper)),
-		"autotask_get_ticket_details": makeRunner(getTicketDetailsHandler(client, mapper)),
-		"autotask_create_ticket":      makeRunner(createTicketHandler(client)),
-		"autotask_update_ticket":      makeRunner(updateTicketHandler(client)),
+		// Projects
+		"autotask_search_projects": makeRunner(searchProjectsHandler(client, mapper)),
+		"autotask_create_project":  makeRunner(createProjectHandler(client)),
 
-		// Notes
+		// Tasks
+		"autotask_search_tasks": makeRunner(searchTasksHandler(client, mapper)),
+		"autotask_create_task":  makeRunner(createTaskHandler(client)),
+
+		// Time entries
+		"autotask_search_time_entries": makeRunner(searchTimeEntriesHandler(client, mapper)),
+		"autotask_create_time_entry":   makeRunner(createTimeEntryHandler(client)),
+
+		// Resources
+		"autotask_search_resources": makeRunner(searchResourcesHandler(client)),
+
+		// Configuration items
+		"autotask_search_configuration_items": makeRunner(searchConfigurationItemsHandler(client, mapper)),
+
+		// Company, ticket, and project notes
 		"autotask_get_ticket_note":      makeRunner(getTicketNoteHandler(client)),
 		"autotask_search_ticket_notes":  makeRunner(searchTicketNotesHandler(client)),
 		"autotask_create_ticket_note":   makeRunner(createTicketNoteHandler(client)),
@@ -232,45 +255,22 @@ func buildToolDispatcher(client *autotask.Client, mapper *services.MappingCache,
 		"autotask_search_company_notes": makeRunner(searchCompanyNotesHandler(client)),
 		"autotask_create_company_note":  makeRunner(createCompanyNoteHandler(client)),
 
-		// Attachments
+		// Ticket attachments
 		"autotask_get_ticket_attachment":     makeRunner(getTicketAttachmentHandler(client)),
 		"autotask_search_ticket_attachments": makeRunner(searchTicketAttachmentsHandler(client)),
 
-		// Projects
-		"autotask_search_projects": makeRunner(searchProjectsHandler(client, mapper)),
-		"autotask_create_project":  makeRunner(createProjectHandler(client)),
-
-		// Tasks
-		"autotask_search_tasks": makeRunner(searchTasksHandler(client, mapper)),
-		"autotask_create_task":  makeRunner(createTaskHandler(client)),
-
-		// Time and Billing
-		"autotask_create_time_entry":                   makeRunner(createTimeEntryHandler(client)),
-		"autotask_search_time_entries":                 makeRunner(searchTimeEntriesHandler(client, mapper)),
-		"autotask_search_billing_items":                makeRunner(searchBillingItemsHandler(client, mapper)),
-		"autotask_get_billing_item":                    makeRunner(getBillingItemHandler(client)),
+		// Billing
+		"autotask_get_billing_item":                   makeRunner(getBillingItemHandler(client)),
+		"autotask_search_billing_items":               makeRunner(searchBillingItemsHandler(client, mapper)),
 		"autotask_search_billing_item_approval_levels": makeRunner(searchBillingItemApprovalLevelsHandler(client)),
-		"autotask_get_expense_report":                  makeRunner(getExpenseReportHandler(client)),
-		"autotask_search_expense_reports":              makeRunner(searchExpenseReportsHandler(client)),
-		"autotask_create_expense_report":               makeRunner(createExpenseReportHandler(client)),
-		"autotask_create_expense_item":                 makeRunner(createExpenseItemHandler(client)),
 
-		// Financial
-		"autotask_get_quote":            makeRunner(getQuoteHandler(client)),
-		"autotask_search_quotes":        makeRunner(searchQuotesHandler(client)),
-		"autotask_create_quote":         makeRunner(createQuoteHandler(client)),
-		"autotask_get_quote_item":       makeRunner(getQuoteItemHandler(client)),
-		"autotask_search_quote_items":   makeRunner(searchQuoteItemsHandler(client)),
-		"autotask_create_quote_item":    makeRunner(createQuoteItemHandler(client)),
-		"autotask_update_quote_item":    makeRunner(updateQuoteItemHandler(client)),
-		"autotask_delete_quote_item":    makeRunner(deleteQuoteItemHandler(client)),
-		"autotask_get_opportunity":      makeRunner(getOpportunityHandler(client)),
-		"autotask_search_opportunities": makeRunner(searchOpportunitiesHandler(client)),
-		"autotask_create_opportunity":   makeRunner(createOpportunityHandler(client)),
-		"autotask_search_invoices":      makeRunner(searchInvoicesHandler(client)),
-		"autotask_search_contracts":     makeRunner(searchContractsHandler(client, mapper)),
+		// Expenses
+		"autotask_get_expense_report":    makeRunner(getExpenseReportHandler(client)),
+		"autotask_search_expense_reports": makeRunner(searchExpenseReportsHandler(client)),
+		"autotask_create_expense_report": makeRunner(createExpenseReportHandler(client)),
+		"autotask_create_expense_item":   makeRunner(createExpenseItemHandler(client)),
 
-		// Products and Services
+		// Sales
 		"autotask_get_product":            makeRunner(getProductHandler(client)),
 		"autotask_search_products":        makeRunner(searchProductsHandler(client)),
 		"autotask_get_service":            makeRunner(getServiceHandler(client)),
@@ -278,11 +278,34 @@ func buildToolDispatcher(client *autotask.Client, mapper *services.MappingCache,
 		"autotask_get_service_bundle":     makeRunner(getServiceBundleHandler(client)),
 		"autotask_search_service_bundles": makeRunner(searchServiceBundlesHandler(client)),
 
-		// Resources
-		"autotask_search_resources": makeRunner(searchResourcesHandler(client)),
+		// Financial
+		"autotask_get_quote":             makeRunner(getQuoteHandler(client)),
+		"autotask_search_quotes":         makeRunner(searchQuotesHandler(client)),
+		"autotask_create_quote":          makeRunner(createQuoteHandler(client)),
+		"autotask_get_quote_item":        makeRunner(getQuoteItemHandler(client)),
+		"autotask_search_quote_items":    makeRunner(searchQuoteItemsHandler(client)),
+		"autotask_create_quote_item":     makeRunner(createQuoteItemHandler(client)),
+		"autotask_update_quote_item":     makeRunner(updateQuoteItemHandler(client)),
+		"autotask_delete_quote_item":     makeRunner(deleteQuoteItemHandler(client)),
+		"autotask_get_opportunity":       makeRunner(getOpportunityHandler(client)),
+		"autotask_search_opportunities":  makeRunner(searchOpportunitiesHandler(client)),
+		"autotask_create_opportunity":    makeRunner(createOpportunityHandler(client)),
+		"autotask_search_contracts":      makeRunner(searchContractsHandler(client, mapper)),
+		"autotask_search_invoices":       makeRunner(searchInvoicesHandler(client)),
+	}
+}
 
-		// Configuration Items
-		"autotask_search_configuration_items": makeRunner(searchConfigurationItemsHandler(client, mapper)),
+// precomputedCategorySummaries is computed once at package initialization.
+var precomputedCategorySummaries map[string]CategorySummary
+
+func init() {
+	precomputedCategorySummaries = make(map[string]CategorySummary, len(ToolCategories))
+	for name, info := range ToolCategories {
+		precomputedCategorySummaries[name] = CategorySummary{
+			Description: info.Description,
+			ToolCount:   len(info.Tools),
+			Tools:       info.Tools,
+		}
 	}
 }
 
@@ -316,34 +339,15 @@ func RegisterLazyTools(s *mcp.Server, client *autotask.Client, mapper *services.
 }
 
 // listCategoriesHandler returns a handler that returns the full category map.
-func listCategoriesHandler() func(ctx context.Context, req *mcp.CallToolRequest, in ListCategoriesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in ListCategoriesInput) (*mcp.CallToolResult, any, error) {
-		// Build a simplified summary with category name, description, and tool count.
-		type categorySummary struct {
-			Description string   `json:"description"`
-			ToolCount   int      `json:"toolCount"`
-			Tools       []string `json:"tools"`
-		}
-		summary := make(map[string]categorySummary, len(ToolCategories))
-		for name, info := range ToolCategories {
-			summary[name] = categorySummary{
-				Description: info.Description,
-				ToolCount:   len(info.Tools),
-				Tools:       info.Tools,
-			}
-		}
-
-		data, err := json.MarshalIndent(summary, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal categories: %v", err)
-		}
-		return textResult("%s", string(data))
+func listCategoriesHandler() func(ctx context.Context, req *mcp.CallToolRequest, in ListCategoriesInput) (*mcp.CallToolResult, map[string]CategorySummary, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in ListCategoriesInput) (*mcp.CallToolResult, map[string]CategorySummary, error) {
+		return nil, precomputedCategorySummaries, nil
 	}
 }
 
 // listCategoryToolsHandler returns a handler that lists tools for a given category.
-func listCategoryToolsHandler() func(ctx context.Context, req *mcp.CallToolRequest, in ListCategoryToolsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in ListCategoryToolsInput) (*mcp.CallToolResult, any, error) {
+func listCategoryToolsHandler() func(ctx context.Context, req *mcp.CallToolRequest, in ListCategoryToolsInput) (*mcp.CallToolResult, CategoryToolsOut, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in ListCategoryToolsInput) (*mcp.CallToolResult, CategoryToolsOut, error) {
 		categoryName := in.Category
 		cat, ok := ToolCategories[in.Category]
 		if !ok {
@@ -359,32 +363,23 @@ func listCategoryToolsHandler() func(ctx context.Context, req *mcp.CallToolReque
 			}
 		}
 		if !ok {
-			return errorResult("unknown category %q; call autotask_list_categories to see available categories", in.Category)
+			return nil, CategoryToolsOut{}, fmt.Errorf("unknown category %q; call autotask_list_categories to see available categories", in.Category)
 		}
 
-		type toolEntry struct {
-			Name        string `json:"name"`
-			Description string `json:"description"`
-		}
-		tools := make([]toolEntry, 0, len(cat.Tools))
+		tools := make([]ToolSummary, 0, len(cat.Tools))
 		for _, name := range cat.Tools {
 			desc := toolDescriptions[name]
 			if desc == "" {
 				desc = name
 			}
-			tools = append(tools, toolEntry{Name: name, Description: desc})
+			tools = append(tools, ToolSummary{Name: name, Description: desc})
 		}
 
-		result := map[string]any{
-			"category":    categoryName,
-			"description": cat.Description,
-			"tools":       tools,
-		}
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal tools: %v", err)
-		}
-		return textResult("%s", string(data))
+		return nil, CategoryToolsOut{
+			Category:    categoryName,
+			Description: cat.Description,
+			Tools:       tools,
+		}, nil
 	}
 }
 
@@ -392,12 +387,12 @@ func listCategoryToolsHandler() func(ctx context.Context, req *mcp.CallToolReque
 func executeToolHandler(dispatcher map[string]ToolRunner) func(ctx context.Context, req *mcp.CallToolRequest, in ExecuteToolInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in ExecuteToolInput) (*mcp.CallToolResult, any, error) {
 		if in.ToolName == "" {
-			return errorResult("toolName is required")
+			return nil, nil, fmt.Errorf("toolName is required")
 		}
 
 		runner, ok := dispatcher[in.ToolName]
 		if !ok || runner == nil {
-			return errorResult("unknown tool %q; call autotask_list_categories or autotask_router to discover available tools", in.ToolName)
+			return nil, nil, fmt.Errorf("unknown tool %q; call autotask_list_categories or autotask_router to discover available tools", in.ToolName)
 		}
 
 		return runner(ctx, in.Arguments)
@@ -405,10 +400,10 @@ func executeToolHandler(dispatcher map[string]ToolRunner) func(ctx context.Conte
 }
 
 // routerHandler returns a handler that routes a natural language intent to a tool.
-func routerHandler() func(ctx context.Context, req *mcp.CallToolRequest, in RouterInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in RouterInput) (*mcp.CallToolResult, any, error) {
+func routerHandler() func(ctx context.Context, req *mcp.CallToolRequest, in RouterInput) (*mcp.CallToolResult, RouterOut, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in RouterInput) (*mcp.CallToolResult, RouterOut, error) {
 		if in.Intent == "" {
-			return errorResult("intent is required")
+			return nil, RouterOut{}, fmt.Errorf("intent is required")
 		}
 
 		intentLower := strings.ToLower(in.Intent)
@@ -433,15 +428,10 @@ func routerHandler() func(ctx context.Context, req *mcp.CallToolRequest, in Rout
 			description = "No specific match found. Use autotask_list_categories to browse available tools."
 		}
 
-		result := map[string]any{
-			"intent":        in.Intent,
-			"suggestedTool": suggestedTool,
-			"description":   description,
-		}
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal result: %v", err)
-		}
-		return textResult("%s", string(data))
+		return nil, RouterOut{
+			Intent:        in.Intent,
+			SuggestedTool: suggestedTool,
+			Description:   description,
+		}, nil
 	}
 }

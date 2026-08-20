@@ -2,10 +2,10 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	"github.com/tphakala/go-autotask/autotasktest"
 )
 
@@ -15,99 +15,84 @@ func TestRegisterResourceTools_NoPanic(t *testing.T) {
 	_, client := autotasktest.NewServer(t)
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
 
-	// Should not panic.
 	RegisterResourceTools(s, client)
 }
 
-// TestSearchResourcesHandler_ReturnsNoResourcesFound tests the empty-result case.
+// TestSearchResourcesHandler_ReturnsNoResourcesFound tests the empty-result case over wire.
 func TestSearchResourcesHandler_ReturnsNoResourcesFound(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-
-	handler := searchResourcesHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, SearchResourcesInput{})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "autotask_search_resources",
+		Arguments: map[string]any{},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true")
-	}
-	if len(result.Content) == 0 {
-		t.Fatal("expected content in result")
-	}
-	text, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", result.Content[0])
-	}
-	if text.Text != "No resources found" {
-		t.Errorf("expected 'No resources found', got %q", text.Text)
-	}
-}
-
-// TestSearchResourcesHandler_ReturnsResources tests that seeded resources are returned.
-func TestSearchResourcesHandler_ReturnsResources(t *testing.T) {
-	resource := autotasktest.ResourceFixture()
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(resource))
-
-	handler := searchResourcesHandler(client)
-	ctx := context.Background()
-
-	result, _, err := handler(ctx, nil, SearchResourcesInput{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire error: %v", err)
 	}
 	if result.IsError {
 		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
 	}
-	if len(result.Content) == 0 {
-		t.Fatal("expected content in result")
-	}
 
-	text, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", result.Content[0])
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned != 0 {
+		t.Errorf("expected 0 returned resources, got %d", resp.Summary.Returned)
 	}
-
-	// Result should be a compact JSON response with summary + items.
-	var resp map[string]any
-	if err := json.Unmarshal([]byte(text.Text), &resp); err != nil {
-		t.Fatalf("result is not valid JSON: %v\ncontent: %s", err, text.Text)
-	}
-	items, ok := resp["items"].([]any)
-	if !ok || len(items) == 0 {
-		t.Error("expected at least one resource in results")
+	if len(resp.Items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(resp.Items))
 	}
 }
 
-// TestSearchResourcesHandler_WithFilters verifies that filters can be applied.
+// TestSearchResourcesHandler_ReturnsResources tests that seeded resources are returned over wire.
+func TestSearchResourcesHandler_ReturnsResources(t *testing.T) {
+	resource := autotasktest.ResourceFixture()
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(resource))
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "autotask_search_resources",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire error: %v", err)
+	}
+	if result.IsError {
+		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned < 1 {
+		t.Errorf("expected at least 1 returned resource, got %d", resp.Summary.Returned)
+	}
+	if len(resp.Items) == 0 {
+		t.Fatal("expected items in response")
+	}
+	if resp.Items[0]["id"] == nil {
+		t.Error("expected resource to contain 'id' field")
+	}
+}
+
+// TestSearchResourcesHandler_WithFilters verifies that filters can be applied over wire.
 func TestSearchResourcesHandler_WithFilters(t *testing.T) {
 	resource := autotasktest.ResourceFixture()
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(resource))
-
-	handler := searchResourcesHandler(client)
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(resource))
 	ctx := context.Background()
 
 	active := true
-	in := SearchResourcesInput{
-		SearchTerm:   "John",
-		IsActive:     &active,
-		ResourceType: "Employee",
-		MaxResults:   10,
-	}
-
-	result, _, err := handler(ctx, nil, in)
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_resources",
+		Arguments: map[string]any{
+			"searchTerm":   "John",
+			"isActive":     active,
+			"resourceType": "Employee",
+			"maxResults":   10,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if result.IsError {
+		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
 	}
-	_ = result
 }
+

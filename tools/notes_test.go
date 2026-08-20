@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/autotasktest"
 	"github.com/tphakala/go-autotask/entities"
@@ -19,81 +19,90 @@ func TestRegisterNoteTools_NoPanic(t *testing.T) {
 	RegisterNoteTools(s, client)
 }
 
-// TestSearchTicketNotesHandler_NoNotes tests that the handler returns a result (possibly empty
-// or error) without panicking when called on an empty server.
+// TestSearchTicketNotesHandler_NoNotes tests searching ticket notes on an empty server.
 func TestSearchTicketNotesHandler_NoNotes(t *testing.T) {
-	// The mock server returns 404 when the TicketNotes entity store does not exist,
-	// which propagates as an error result (not a protocol error). Verify no panic.
-	_, client := autotasktest.NewServer(t)
-	handler := searchTicketNotesHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, SearchTicketNotesInput{TicketID: 3001})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_ticket_notes",
+		Arguments: map[string]any{
+			"ticketId": 3001,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	// The result may be an error (404 from mock) or success; both are acceptable.
-	// We only verify there is no panic and a result is returned.
-}
-
-// TestSearchTicketNotesHandler_WithNotes tests that seeded notes are returned.
-func TestSearchTicketNotesHandler_WithNotes(t *testing.T) {
-	note := autotasktest.TicketNoteFixture()
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(note))
-
-	handler := searchTicketNotesHandler(client)
-	ctx := context.Background()
-
-	result, _, err := handler(ctx, nil, SearchTicketNotesInput{TicketID: 3001})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+		if len(result.Content) > 0 {
+			if tc, ok := result.Content[0].(*mcp.TextContent); ok {
+				t.Fatalf("expected non-error result, got IsError=true; content: %s", tc.Text)
+			}
+		}
+		t.Fatalf("expected non-error result, got IsError=true; content: %v", result.Content)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned != 0 {
+		t.Errorf("expected 0 returned notes, got %d", resp.Summary.Returned)
 	}
 }
 
-// TestSearchTicketNotesHandler_TruncationAndFraming tests that long note bodies are truncated and untrusted content is framed.
+// TestSearchTicketNotesHandler_WithNotes tests that seeded notes are returned over wire.
+func TestSearchTicketNotesHandler_WithNotes(t *testing.T) {
+	note := autotasktest.TicketNoteFixture()
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(note))
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_ticket_notes",
+		Arguments: map[string]any{
+			"ticketId": 3001,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected non-error result, got IsError=true; content: %v", result.Content)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned < 1 {
+		t.Errorf("expected at least 1 note, got %d", resp.Summary.Returned)
+	}
+}
+
+// TestSearchTicketNotesHandler_TruncationAndFraming tests that long note bodies are truncated and untrusted content is framed over wire.
 func TestSearchTicketNotesHandler_TruncationAndFraming(t *testing.T) {
 	longDescription := strings.Repeat("A", 600)
 	note := autotasktest.TicketNoteFixture(func(n *entities.TicketNote) {
 		n.Description = autotask.Set(longDescription)
 		n.Title = autotask.Set("Untrusted Note Title")
 	})
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(note))
-
-	handler := searchTicketNotesHandler(client)
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(note))
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, SearchTicketNotesInput{TicketID: 3001, MaxResults: 10})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_ticket_notes",
+		Arguments: map[string]any{
+			"ticketId":   3001,
+			"maxResults": 10,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil || result.IsError {
+	if result.IsError {
 		t.Fatalf("expected non-error result, got: %v", result)
 	}
 
-	textContent, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-
-	var notes []map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &notes); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
-
-	if len(notes) == 0 {
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if len(resp.Items) == 0 {
 		t.Fatal("expected at least 1 note")
 	}
 
-	n := notes[0]
+	n := resp.Items[0]
 	desc, _ := n["description"].(string)
 	if !strings.Contains(desc, "truncated for search") {
 		t.Errorf("expected description to be truncated, got: %v", desc)
@@ -108,176 +117,217 @@ func TestSearchTicketNotesHandler_TruncationAndFraming(t *testing.T) {
 	}
 }
 
-// TestGetTicketNoteHandler_NotFound tests that a missing note returns an error result.
+// TestGetTicketNoteHandler_NotFound tests that a missing note returns an error result over wire.
 func TestGetTicketNoteHandler_NotFound(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := getTicketNoteHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetTicketNoteInput{NoteID: 99999})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_get_ticket_note",
+		Arguments: map[string]any{
+			"noteId": 99999,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for missing note")
 	}
 }
 
-// TestGetTicketNoteHandler_Success tests that a seeded note is retrieved.
+// TestGetTicketNoteHandler_Success tests that a seeded note is retrieved over wire.
 func TestGetTicketNoteHandler_Success(t *testing.T) {
 	note := autotasktest.TicketNoteFixture()
 	noteID, ok := note.ID.Get()
 	if !ok {
 		t.Fatal("fixture note has no ID")
 	}
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(note))
-
-	handler := getTicketNoteHandler(client)
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(note))
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetTicketNoteInput{NoteID: noteID})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
-	}
-}
-
-// TestCreateTicketNoteHandler_Success tests that a ticket note can be created.
-func TestCreateTicketNoteHandler_Success(t *testing.T) {
-	_, client := autotasktest.NewServer(t,
-		autotasktest.WithEntity(autotasktest.TicketNoteFixture()),
-	)
-
-	handler := createTicketNoteHandler(client)
-	ctx := context.Background()
-
-	result, _, err := handler(ctx, nil, CreateTicketNoteInput{
-		TicketID:    3001,
-		Description: "Test note description",
-		Title:       "Test note",
-		NoteType:    1,
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_get_ticket_note",
+		Arguments: map[string]any{
+			"noteId": noteID,
+		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire error: %v", err)
 	}
 	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+		t.Fatalf("expected non-error result, got IsError=true; content: %v", result.Content)
+	}
+
+	m := parseStructuredContent[map[string]any](t, result)
+	idVal, ok := m["id"]
+	if !ok {
+		t.Fatalf("expected 'id' field in note response")
+	}
+	fVal, isFloat := idVal.(float64)
+	if !isFloat || int64(fVal) != noteID {
+		t.Errorf("expected id=%d, got %v", noteID, idVal)
 	}
 }
 
-// TestGetProjectNoteHandler_NotFound tests that a missing project note returns an error result.
-func TestGetProjectNoteHandler_NotFound(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := getProjectNoteHandler(client)
+// TestCreateTicketNoteHandler_Success tests creating a ticket note over wire.
+func TestCreateTicketNoteHandler_Success(t *testing.T) {
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.TicketNoteFixture()))
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetProjectNoteInput{NoteID: 99999})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_create_ticket_note",
+		Arguments: map[string]any{
+			"ticketId":    3001,
+			"description": "Test note description",
+			"title":       "Test note",
+			"noteType":    1,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if result.IsError {
+		t.Fatalf("expected no error result, got IsError=true; content: %v", result.Content)
+	}
+
+	m := parseStructuredContent[map[string]any](t, result)
+	titleStr, _ := m["title"].(string)
+	if !strings.Contains(titleStr, "Test note") {
+		t.Errorf("expected title to contain 'Test note', got %v", m["title"])
+	}
+}
+
+// TestGetProjectNoteHandler_NotFound tests that a missing project note returns an error result over wire.
+func TestGetProjectNoteHandler_NotFound(t *testing.T) {
+	cs, _ := setupWireTest(t)
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_get_project_note",
+		Arguments: map[string]any{
+			"noteId": 99999,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for missing project note")
 	}
 }
 
-// TestSearchProjectNotesHandler_NoNotes tests that the handler does not panic on an empty server.
+// TestSearchProjectNotesHandler_NoNotes tests searching project notes on an empty server.
 func TestSearchProjectNotesHandler_NoNotes(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := searchProjectNotesHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, SearchProjectNotesInput{ProjectID: 4001})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_project_notes",
+		Arguments: map[string]any{
+			"projectId": 4001,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if result.IsError {
+		t.Fatalf("expected non-error result, got IsError=true; content: %v", result.Content)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned != 0 {
+		t.Errorf("expected 0 returned project notes, got %d", resp.Summary.Returned)
 	}
 }
 
-// TestSearchCompanyNotesHandler_NoNotes tests that the handler does not panic on an empty server.
+// TestSearchCompanyNotesHandler_NoNotes tests searching company notes on an empty server.
 func TestSearchCompanyNotesHandler_NoNotes(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := searchCompanyNotesHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, SearchCompanyNotesInput{CompanyID: 1001})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_company_notes",
+		Arguments: map[string]any{
+			"companyId": 1001,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if result.IsError {
+		t.Fatalf("expected non-error result, got IsError=true; content: %v", result.Content)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned != 0 {
+		t.Errorf("expected 0 returned company notes, got %d", resp.Summary.Returned)
 	}
 }
 
-// TestCreateProjectNoteHandler_Success tests that a project note can be created.
+// TestCreateProjectNoteHandler_Success tests creating a project note over wire.
 func TestCreateProjectNoteHandler_Success(t *testing.T) {
 	proj := autotasktest.ProjectFixture()
 	projID, ok := proj.ID.Get()
 	if !ok {
 		t.Fatal("fixture project has no ID")
 	}
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(proj))
-
-	handler := createProjectNoteHandler(client)
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(proj))
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, CreateProjectNoteInput{
-		ProjectID:   projID,
-		Description: "Project note body",
-		Title:       "Project note title",
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_create_project_note",
+		Arguments: map[string]any{
+			"projectId":   projID,
+			"description": "Project note body",
+			"title":       "Project note title",
+		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire error: %v", err)
 	}
 	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+		t.Fatalf("expected no error result, got IsError=true; content: %v", result.Content)
+	}
+
+	m := parseStructuredContent[map[string]any](t, result)
+	titleStr, _ := m["title"].(string)
+	if !strings.Contains(titleStr, "Project note title") {
+		t.Errorf("expected title to contain 'Project note title', got %v", m["title"])
 	}
 }
 
-// TestCreateCompanyNoteHandler_Success tests that a company note can be created.
+// TestCreateCompanyNoteHandler_Success tests creating a company note over wire.
 func TestCreateCompanyNoteHandler_Success(t *testing.T) {
 	comp := autotasktest.CompanyFixture()
 	compID, ok := comp.ID.Get()
 	if !ok {
 		t.Fatal("fixture company has no ID")
 	}
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(comp))
-
-	handler := createCompanyNoteHandler(client)
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(comp))
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, CreateCompanyNoteInput{
-		CompanyID:   compID,
-		Description: "Company note body",
-		Title:       "Company note title",
-		ActionType:  1,
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_create_company_note",
+		Arguments: map[string]any{
+			"companyId":   compID,
+			"description": "Company note body",
+			"title":       "Company note title",
+			"actionType":  1,
+		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire error: %v", err)
 	}
 	if result.IsError {
-		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+		t.Fatalf("expected no error result, got IsError=true; content: %v", result.Content)
+	}
+
+	m := parseStructuredContent[map[string]any](t, result)
+	nameStr, _ := m["name"].(string)
+	if !strings.Contains(nameStr, "Company note title") {
+		t.Errorf("expected name to contain 'Company note title', got %v", m["name"])
 	}
 }
+
 

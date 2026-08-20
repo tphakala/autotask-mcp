@@ -2,10 +2,10 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/autotasktest"
 	"github.com/tphakala/go-autotask/entities"
@@ -18,42 +18,87 @@ func TestRegisterAttachmentTools_NoPanic(t *testing.T) {
 	RegisterAttachmentTools(s, client)
 }
 
-// TestGetTicketAttachmentHandler_NotFound tests that a missing attachment returns an error result.
+// TestGetTicketAttachmentHandler_NotFound tests that a missing attachment returns an error result over wire.
 func TestGetTicketAttachmentHandler_NotFound(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := getTicketAttachmentHandler(client)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetTicketAttachmentInput{AttachmentID: 99999})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_get_ticket_attachment",
+		Arguments: map[string]any{
+			"attachmentId": 99999,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for missing attachment")
 	}
 }
 
-// TestSearchTicketAttachmentsHandler_NoPanic verifies the search handler does not panic.
-func TestSearchTicketAttachmentsHandler_NoPanic(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	handler := searchTicketAttachmentsHandler(client)
+// TestSearchTicketAttachmentsHandler_NoResults verifies empty search response over wire.
+func TestSearchTicketAttachmentsHandler_NoResults(t *testing.T) {
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, SearchTicketAttachmentsInput{TicketID: 3001})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_ticket_attachments",
+		Arguments: map[string]any{
+			"ticketId": 3001,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
+		t.Fatalf("unexpected wire protocol error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if result.IsError {
+		t.Fatalf("expected non-error result, got: %v", result)
 	}
-	// Note: IsError may be true when mock server has no ticket store for the parent ID.
-	// The key assertion is that the handler doesn't panic and returns a valid result.
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned != 0 {
+		t.Errorf("expected 0 returned attachments, got %d", resp.Summary.Returned)
+	}
 }
 
-// TestGetTicketAttachmentHandler_StripDataByDefault tests that attachment data is stripped by default.
+// TestSearchTicketAttachmentsHandler_WithResults verifies seeded attachments are returned with data stripped.
+func TestSearchTicketAttachmentsHandler_WithResults(t *testing.T) {
+	att := &entities.TicketAttachment{
+		ID:       autotask.Set(int64(7001)),
+		TicketID: autotask.Set(int64(3001)),
+		Title:    autotask.Set("test attachment"),
+		Data:     autotask.Set("SGVsbG8gV29ybGQ="),
+		FullPath: autotask.Set("/path/to/test.txt"),
+	}
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(att))
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_ticket_attachments",
+		Arguments: map[string]any{
+			"ticketId": 3001,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected non-error result, got: %v", result)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned < 1 {
+		t.Fatalf("expected at least 1 attachment, got %d", resp.Summary.Returned)
+	}
+	if _, exists := resp.Items[0]["data"]; exists {
+		t.Errorf("expected 'data' field to be stripped from search results")
+	}
+	if _, exists := resp.Items[0]["fullPath"]; exists {
+		t.Errorf("expected 'fullPath' field to be stripped from search results")
+	}
+}
+
+// TestGetTicketAttachmentHandler_StripDataByDefault tests that attachment data is stripped by default over wire.
 func TestGetTicketAttachmentHandler_StripDataByDefault(t *testing.T) {
 	att := &entities.TicketAttachment{
 		ID:       autotask.Set(int64(7001)),
@@ -62,29 +107,24 @@ func TestGetTicketAttachmentHandler_StripDataByDefault(t *testing.T) {
 		Data:     autotask.Set("SGVsbG8gV29ybGQ="),
 		FullPath: autotask.Set("/path/to/test.txt"),
 	}
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(att))
-
-	handler := getTicketAttachmentHandler(client)
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(att))
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetTicketAttachmentInput{AttachmentID: 7001, IncludeData: false})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_get_ticket_attachment",
+		Arguments: map[string]any{
+			"attachmentId": 7001,
+			"includeData":  false,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil || result.IsError {
+	if result.IsError {
 		t.Fatalf("expected non-error result, got: %v", result)
 	}
 
-	textContent, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-
-	var m map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &m); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
-
+	m := parseStructuredContent[map[string]any](t, result)
 	if _, exists := m["data"]; exists {
 		t.Errorf("expected 'data' field to be stripped, but found: %v", m["data"])
 	}
@@ -93,7 +133,7 @@ func TestGetTicketAttachmentHandler_StripDataByDefault(t *testing.T) {
 	}
 }
 
-// TestGetTicketAttachmentHandler_IncludeData tests that attachment data is included when requested.
+// TestGetTicketAttachmentHandler_IncludeData tests that attachment data is included when requested over wire.
 func TestGetTicketAttachmentHandler_IncludeData(t *testing.T) {
 	att := &entities.TicketAttachment{
 		ID:       autotask.Set(int64(7001)),
@@ -102,30 +142,26 @@ func TestGetTicketAttachmentHandler_IncludeData(t *testing.T) {
 		Data:     autotask.Set("SGVsbG8gV29ybGQ="),
 		FullPath: autotask.Set("/path/to/test.txt"),
 	}
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(att))
-
-	handler := getTicketAttachmentHandler(client)
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(att))
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, GetTicketAttachmentInput{AttachmentID: 7001, IncludeData: true})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_get_ticket_attachment",
+		Arguments: map[string]any{
+			"attachmentId": 7001,
+			"includeData":  true,
+		},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil || result.IsError {
+	if result.IsError {
 		t.Fatalf("expected non-error result, got: %v", result)
 	}
 
-	textContent, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-
-	var m map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &m); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
-
+	m := parseStructuredContent[map[string]any](t, result)
 	if _, exists := m["data"]; !exists {
 		t.Errorf("expected 'data' field to be present when includeData=true")
 	}
 }
+

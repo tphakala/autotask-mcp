@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -48,11 +47,11 @@ func RegisterTimeEntryTools(s *mcp.Server, client *autotask.Client, mapper *serv
 }
 
 // createTimeEntryHandler returns a handler that creates a new time entry.
-func createTimeEntryHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTimeEntryInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTimeEntryInput) (*mcp.CallToolResult, any, error) {
+func createTimeEntryHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTimeEntryInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTimeEntryInput) (*mcp.CallToolResult, map[string]any, error) {
 		dateWorked, err := parseDate(in.DateWorked)
 		if err != nil {
-			return errorResult("invalid dateWorked format (expected YYYY-MM-DD or ISO format): %v", err)
+			return nil, nil, err
 		}
 
 		entry := &entities.TimeEntry{
@@ -74,40 +73,35 @@ func createTimeEntryHandler(client *autotask.Client) func(ctx context.Context, r
 		if in.StartDateTime != "" {
 			t, err := parseDate(in.StartDateTime)
 			if err != nil {
-				return errorResult("invalid startDateTime format (expected ISO 8601 / RFC3339): %v", err)
+				return nil, nil, err
 			}
 			entry.StartDateTime = autotask.Set(t)
 		}
 		if in.EndDateTime != "" {
 			t, err := parseDate(in.EndDateTime)
 			if err != nil {
-				return errorResult("invalid endDateTime format (expected ISO 8601 / RFC3339): %v", err)
+				return nil, nil, err
 			}
 			entry.EndDateTime = autotask.Set(t)
 		}
 
 		created, err := autotask.Create[entities.TimeEntry](ctx, client, entry)
 		if err != nil {
-			return errorResult("failed to create time entry: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created time entry: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created time entry: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchTimeEntriesHandler returns a handler that searches time entries using the provided filters.
-func searchTimeEntriesHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTimeEntriesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTimeEntriesInput) (*mcp.CallToolResult, any, error) {
+func searchTimeEntriesHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTimeEntriesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTimeEntriesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 
 		q := autotask.NewQuery().Limit(maxResults)
@@ -127,16 +121,16 @@ func searchTimeEntriesHandler(client *autotask.Client, mapper *services.MappingC
 
 		entries, err := autotask.List[entities.TimeEntry](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search time entries: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(entries) == 0 {
-			return textResult("No time entries found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(entries)
 		if err != nil {
-			return errorResult("failed to convert time entries: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, mapper, maps, "autotask_search_time_entries", maxResults)
