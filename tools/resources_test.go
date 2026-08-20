@@ -99,8 +99,7 @@ func TestSearchResourcesHandler_WithFilters(t *testing.T) {
 		SearchTerm:   "John",
 		IsActive:     &active,
 		ResourceType: "Employee",
-		Page:         1,
-		PageSize:     10,
+		MaxResults:   10,
 	}
 
 	result, _, err := handler(ctx, nil, in)

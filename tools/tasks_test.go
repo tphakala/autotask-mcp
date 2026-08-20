@@ -147,8 +147,7 @@ func TestSearchTasksHandler_WithFilters(t *testing.T) {
 		ProjectID:          4001,
 		Status:             1,
 		AssignedResourceID: 5001,
-		Page:               1,
-		PageSize:           10,
+		MaxResults:         10,
 	}
 
 	result, _, err := handler(ctx, nil, in)

@@ -57,7 +57,8 @@ func localReadTool(title string) *mcp.ToolAnnotations {
 	return &mcp.ToolAnnotations{Title: title, ReadOnlyHint: true, OpenWorldHint: new(false)}
 }
 
-// entityToMap converts a typed entity to map[string]any for formatting/enhancement.
+// entityToMap converts a typed entity to map[string]any for formatting/enhancement,
+// and wraps untrusted user-supplied text fields in boundary markers.
 func entityToMap(entity any) (map[string]any, error) {
 	data, err := json.Marshal(entity)
 	if err != nil {
@@ -67,6 +68,7 @@ func entityToMap(entity any) (map[string]any, error) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("entityToMap: unmarshal: %w", err)
 	}
+	services.FrameUntrustedMapFields(m)
 	return m, nil
 }
 
@@ -104,13 +106,13 @@ func errorResult(format string, args ...any) (*mcp.CallToolResult, any, error) {
 }
 
 // searchResult builds a compact formatted search result with enhancement.
-func searchResult(ctx context.Context, mapper *services.MappingCache, items []map[string]any, toolName string, page, pageSize int) (*mcp.CallToolResult, any, error) {
+func searchResult(ctx context.Context, mapper *services.MappingCache, items []map[string]any, toolName string, maxResults int) (*mcp.CallToolResult, any, error) {
 	if mapper != nil {
 		mapper.EnhanceItems(ctx, items)
 	}
 
 	entityType := services.DetectEntityType(toolName)
-	opts := services.FormatOptions{Page: page, PageSize: pageSize}
+	opts := services.FormatOptions{MaxResults: maxResults}
 	compact := services.FormatCompactResponse(items, entityType, opts)
 
 	data, err := json.Marshal(compact)
@@ -123,9 +125,9 @@ func searchResult(ctx context.Context, mapper *services.MappingCache, items []ma
 	}, nil, nil
 }
 
-// defaultPageSize returns the effective page size clamped to [1, maxVal].
+// defaultMaxResults returns the effective max results limit clamped to [1, maxVal].
 // If requested is <= 0, defaultVal is used.
-func defaultPageSize(requested, defaultVal, maxVal int) int {
+func defaultMaxResults(requested, defaultVal, maxVal int) int {
 	size := requested
 	if size <= 0 {
 		size = defaultVal
@@ -137,14 +139,6 @@ func defaultPageSize(requested, defaultVal, maxVal int) int {
 		size = 1
 	}
 	return size
-}
-
-// defaultPage returns the effective page number (minimum 1).
-func defaultPage(requested int) int {
-	if requested < 1 {
-		return 1
-	}
-	return requested
 }
 
 // parseDate parses a date string in YYYY-MM-DD or RFC3339 format.

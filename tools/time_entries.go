@@ -29,8 +29,7 @@ type SearchTimeEntriesInput struct {
 	TicketID         int64  `json:"ticketID,omitempty" jsonschema:"Filter by ticket ID"`
 	DateWorkedAfter  string `json:"dateWorkedAfter,omitempty" jsonschema:"Filter entries worked on or after this date (ISO format)"`
 	DateWorkedBefore string `json:"dateWorkedBefore,omitempty" jsonschema:"Filter entries worked on or before this date (ISO format)"`
-	Page             int    `json:"page,omitempty" jsonschema:"Page number (default 1)"`
-	PageSize         int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults       int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // RegisterTimeEntryTools registers all time entry-related MCP tools with the server.
@@ -43,7 +42,7 @@ func RegisterTimeEntryTools(s *mcp.Server, client *autotask.Client, mapper *serv
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_time_entries",
-		Description: "Find logged time entries by resource, ticket, or date-worked range, returning a compact paginated summary (25 per page, max 500). Use this to review or locate recorded time; to log new time use autotask_create_time_entry instead. Read-only.",
+		Description: "Find logged time entries by resource, ticket, or date-worked range, returning a compact summary of matching records (up to maxResults, default 25, max 500). Use this to review or locate recorded time; to log new time use autotask_create_time_entry instead. Read-only.",
 		Annotations: readOnlyTool("Search time entries"),
 	}, searchTimeEntriesHandler(client, mapper))
 }
@@ -109,10 +108,9 @@ func createTimeEntryHandler(client *autotask.Client) func(ctx context.Context, r
 // searchTimeEntriesHandler returns a handler that searches time entries using the provided filters.
 func searchTimeEntriesHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTimeEntriesInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTimeEntriesInput) (*mcp.CallToolResult, any, error) {
-		page := defaultPage(in.Page)
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 
-		q := autotask.NewQuery().Limit(pageSize)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.ResourceID != 0 {
 			q.Where("resourceID", autotask.OpEq, in.ResourceID)
@@ -141,6 +139,6 @@ func searchTimeEntriesHandler(client *autotask.Client, mapper *services.MappingC
 			return errorResult("failed to convert time entries: %v", err)
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_time_entries", page, pageSize)
+		return searchResult(ctx, mapper, maps, "autotask_search_time_entries", maxResults)
 	}
 }

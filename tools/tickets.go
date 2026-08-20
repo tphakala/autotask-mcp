@@ -20,8 +20,7 @@ type SearchTicketsInput struct {
 	CreatedAfter       string `json:"createdAfter,omitempty" jsonschema:"Filter tickets created on or after this date (ISO format)"`
 	CreatedBefore      string `json:"createdBefore,omitempty" jsonschema:"Filter tickets created on or before this date (ISO format)"`
 	LastActivityAfter  string `json:"lastActivityAfter,omitempty" jsonschema:"Filter tickets with activity on or after this date (ISO format)"`
-	Page               int    `json:"page,omitempty" jsonschema:"Page number (default 1)"`
-	PageSize           int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults         int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // GetTicketDetailsInput defines the input parameters for retrieving a single ticket.
@@ -60,7 +59,7 @@ type UpdateTicketInput struct {
 func RegisterTicketTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_tickets",
-		Description: "Find open tickets by company, status, assignee, unassigned flag, ticket-number prefix, or create/activity date range, returning a compact paginated summary (25 per page, max 500). Excludes completed tickets (status 5) unless a status filter is given. Use this to locate tickets, then autotask_get_ticket_details for the full field set of one ticket. Read-only.",
+		Description: "Find open tickets by company, status, assignee, unassigned flag, ticket-number prefix, or create/activity date range, returning a compact summary of matching records (up to maxResults, default 25, max 500). Excludes completed tickets (status 5) unless a status filter is given. Use this to locate tickets, then autotask_get_ticket_details for the full field set of one ticket. Read-only.",
 		Annotations: readOnlyTool("Search tickets"),
 	}, searchTicketsHandler(client, mapper))
 
@@ -86,13 +85,9 @@ func RegisterTicketTools(s *mcp.Server, client *autotask.Client, mapper *service
 // searchTicketsHandler returns a handler that searches tickets using the provided filters.
 func searchTicketsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketsInput) (*mcp.CallToolResult, any, error) {
-		page := defaultPage(in.Page)
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 
-		// Autotask uses cursor-based pagination (NextPageURL), not offset-based.
-		// pageSize controls how many records to fetch; page is used only for
-		// metadata in the compact response (so callers can track which page they are on).
-		q := autotask.NewQuery().Limit(pageSize)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		// Default: exclude completed tickets (status 5) unless a specific status is requested.
 		if in.Status != 0 {
@@ -137,7 +132,7 @@ func searchTicketsHandler(client *autotask.Client, mapper *services.MappingCache
 			return errorResult("failed to convert tickets: %v", err)
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_tickets", page, pageSize)
+		return searchResult(ctx, mapper, maps, "autotask_search_tickets", maxResults)
 	}
 }
 

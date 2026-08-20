@@ -16,8 +16,7 @@ type SearchTasksInput struct {
 	ProjectID          int64  `json:"projectID,omitempty" jsonschema:"Filter by project ID"`
 	Status             int    `json:"status,omitempty" jsonschema:"Filter by task status (1=New, 2=In Progress, 5=Complete)"`
 	AssignedResourceID int64  `json:"assignedResourceID,omitempty" jsonschema:"Filter by assigned resource ID"`
-	Page               int    `json:"page,omitempty" jsonschema:"Page number (default 1)"`
-	PageSize           int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 100)"`
+	MaxResults         int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 100)"`
 }
 
 // CreateTaskInput defines the input parameters for creating a new task.
@@ -36,7 +35,7 @@ type CreateTaskInput struct {
 func RegisterTaskTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_tasks",
-		Description: "Find project tasks by title substring, parent project ID, status, or assigned resource, returning a compact paginated summary (25 per page, max 100). Use this to locate tasks within a project; to add a new task use autotask_create_task instead. Returns tasks of every status when no status filter is given, including completed tasks. Read-only.",
+		Description: "Find project tasks by title substring, parent project ID, status, or assigned resource, returning a compact summary of matching records (up to maxResults, default 25, max 100). Use this to locate tasks within a project; to add a new task use autotask_create_task instead. Returns tasks of every status when no status filter is given, including completed tasks. Read-only.",
 		Annotations: readOnlyTool("Search tasks"),
 	}, searchTasksHandler(client, mapper))
 
@@ -50,10 +49,9 @@ func RegisterTaskTools(s *mcp.Server, client *autotask.Client, mapper *services.
 // searchTasksHandler returns a handler that searches tasks using the provided filters.
 func searchTasksHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTasksInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTasksInput) (*mcp.CallToolResult, any, error) {
-		page := defaultPage(in.Page)
-		pageSize := defaultPageSize(in.PageSize, 25, 100)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
 
-		q := autotask.NewQuery().Limit(pageSize)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.SearchTerm != "" {
 			q.Where("title", autotask.OpContains, in.SearchTerm)
@@ -82,7 +80,7 @@ func searchTasksHandler(client *autotask.Client, mapper *services.MappingCache) 
 			return errorResult("failed to convert tasks: %v", err)
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_tasks", page, pageSize)
+		return searchResult(ctx, mapper, maps, "autotask_search_tasks", maxResults)
 	}
 }
 

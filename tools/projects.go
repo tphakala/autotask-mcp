@@ -15,8 +15,7 @@ type SearchProjectsInput struct {
 	SearchTerm string `json:"searchTerm,omitempty" jsonschema:"Search term for project name"`
 	CompanyID  int64  `json:"companyID,omitempty" jsonschema:"Filter by company ID"`
 	Status     int    `json:"status,omitempty" jsonschema:"Filter by project status"`
-	Page       int    `json:"page,omitempty" jsonschema:"Page number (default 1)"`
-	PageSize   int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 100)"`
+	MaxResults int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 100)"`
 }
 
 // CreateProjectInput defines the input parameters for creating a new project.
@@ -34,7 +33,7 @@ type CreateProjectInput struct {
 func RegisterProjectTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_projects",
-		Description: "Find projects by name substring, company ID, or status, returning a compact paginated summary (25 per page, max 100). Use this to locate existing projects; to add a new one use autotask_create_project instead. Returns projects of every status when no status filter is given, including completed projects. Read-only.",
+		Description: "Find projects by name substring, company ID, or status, returning a compact summary of matching records (up to maxResults, default 25, max 100). Use this to locate existing projects; to add a new one use autotask_create_project instead. Returns projects of every status when no status filter is given, including completed projects. Read-only.",
 		Annotations: readOnlyTool("Search projects"),
 	}, searchProjectsHandler(client, mapper))
 
@@ -48,10 +47,9 @@ func RegisterProjectTools(s *mcp.Server, client *autotask.Client, mapper *servic
 // searchProjectsHandler returns a handler that searches projects using the provided filters.
 func searchProjectsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectsInput) (*mcp.CallToolResult, any, error) {
-		page := defaultPage(in.Page)
-		pageSize := defaultPageSize(in.PageSize, 25, 100)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
 
-		q := autotask.NewQuery().Limit(pageSize)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.SearchTerm != "" {
 			q.Where("projectName", autotask.OpContains, in.SearchTerm)
@@ -77,7 +75,7 @@ func searchProjectsHandler(client *autotask.Client, mapper *services.MappingCach
 			return errorResult("failed to convert projects: %v", err)
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_projects", page, pageSize)
+		return searchResult(ctx, mapper, maps, "autotask_search_projects", maxResults)
 	}
 }
 

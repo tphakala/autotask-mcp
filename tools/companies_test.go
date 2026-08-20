@@ -189,8 +189,7 @@ func TestSearchCompaniesHandler_WithFilters(t *testing.T) {
 	in := SearchCompaniesInput{
 		SearchTerm: "Acme",
 		IsActive:   &active,
-		Page:       1,
-		PageSize:   10,
+		MaxResults: 10,
 	}
 
 	result, _, err := handler(ctx, nil, in)

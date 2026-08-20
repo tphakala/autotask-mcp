@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -122,8 +123,9 @@ func TestIntegration_CreateAndGetTicket(t *testing.T) {
 		t.Fatalf("failed to parse create_ticket response: %v", err)
 	}
 
-	// The response should include the title that was provided.
-	if ticketResp["title"] != "Integration test ticket" {
+	// The response should include the title that was provided (framed as untrusted content).
+	titleVal, _ := ticketResp["title"].(string)
+	if !strings.Contains(titleVal, "Integration test ticket") {
 		t.Errorf("expected title in response, got: %v", ticketResp["title"])
 	}
 

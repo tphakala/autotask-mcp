@@ -15,14 +15,14 @@ type SearchConfigurationItemsInput struct {
 	CompanyID  int64  `json:"companyID,omitempty" jsonschema:"Filter by company ID"`
 	IsActive   *bool  `json:"isActive,omitempty" jsonschema:"Filter by active status"`
 	ProductID  int64  `json:"productID,omitempty" jsonschema:"Filter by product ID"`
-	PageSize   int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // RegisterConfigItemTools registers all configuration item MCP tools with the server.
 func RegisterConfigItemTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_configuration_items",
-		Description: "Find configuration items (CIs: assets or installed products tracked against a company) by reference-title substring, company, active status, or product, returning a compact summary of up to 25 (max 500). CIs link a company to the products it owns; filter by companyID to list one company's assets or by productID (from autotask_search_products) to find every install of a product. Read-only.",
+		Description: "Find configuration items (CIs: assets or installed products tracked against a company) by reference-title substring, company, active status, or product, returning a compact summary of up to maxResults (default 25, max 500). CIs link a company to the products it owns; filter by companyID to list one company's assets or by productID (from autotask_search_products) to find every install of a product. Read-only.",
 		Annotations: readOnlyTool("Search configuration items"),
 	}, searchConfigurationItemsHandler(client, mapper))
 }
@@ -30,9 +30,8 @@ func RegisterConfigItemTools(s *mcp.Server, client *autotask.Client, mapper *ser
 // searchConfigurationItemsHandler returns a handler that searches configuration items.
 func searchConfigurationItemsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchConfigurationItemsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchConfigurationItemsInput) (*mcp.CallToolResult, any, error) {
-		page := 1
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
-		q := autotask.NewQuery().Limit(pageSize)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.SearchTerm != "" {
 			q.Where("referenceTitle", autotask.OpContains, in.SearchTerm)
@@ -61,6 +60,6 @@ func searchConfigurationItemsHandler(client *autotask.Client, mapper *services.M
 			return errorResult("failed to convert configuration items: %v", err)
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_configuration_items", page, pageSize)
+		return searchResult(ctx, mapper, maps, "autotask_search_configuration_items", maxResults)
 	}
 }

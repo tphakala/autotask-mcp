@@ -1,70 +1,56 @@
 package tools
 
 import (
+	"context"
+	"encoding/json"
+	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestDefaultPageSize_Default(t *testing.T) {
+func TestDefaultMaxResults_Default(t *testing.T) {
 	// When requested <= 0, use defaultVal
-	got := defaultPageSize(0, 25, 100)
+	got := defaultMaxResults(0, 25, 100)
 	if got != 25 {
 		t.Errorf("expected 25, got %d", got)
 	}
 
-	got = defaultPageSize(-5, 25, 100)
+	got = defaultMaxResults(-5, 25, 100)
 	if got != 25 {
 		t.Errorf("expected 25, got %d", got)
 	}
 }
 
-func TestDefaultPageSize_Clamped(t *testing.T) {
+func TestDefaultMaxResults_Clamped(t *testing.T) {
 	// When requested > maxVal, clamp to maxVal
-	got := defaultPageSize(500, 25, 100)
+	got := defaultMaxResults(500, 25, 100)
 	if got != 100 {
 		t.Errorf("expected 100, got %d", got)
 	}
 }
 
-func TestDefaultPageSize_Valid(t *testing.T) {
+func TestDefaultMaxResults_Valid(t *testing.T) {
 	// When requested is within bounds, return it
-	got := defaultPageSize(50, 25, 100)
+	got := defaultMaxResults(50, 25, 100)
 	if got != 50 {
 		t.Errorf("expected 50, got %d", got)
 	}
 }
 
-func TestDefaultPageSize_MinOne(t *testing.T) {
+func TestDefaultMaxResults_MinOne(t *testing.T) {
 	// defaultVal=0 and maxVal=0 edge case: result should be at least 1
-	got := defaultPageSize(0, 0, 0)
+	got := defaultMaxResults(0, 0, 0)
 	if got != 1 {
 		t.Errorf("expected minimum 1, got %d", got)
 	}
 }
 
-func TestDefaultPageSize_ExactMax(t *testing.T) {
+func TestDefaultMaxResults_ExactMax(t *testing.T) {
 	// Exactly at max boundary
-	got := defaultPageSize(100, 25, 100)
+	got := defaultMaxResults(100, 25, 100)
 	if got != 100 {
 		t.Errorf("expected 100, got %d", got)
-	}
-}
-
-func TestDefaultPage_Default(t *testing.T) {
-	// page < 1 should return 1
-	if got := defaultPage(0); got != 1 {
-		t.Errorf("expected 1, got %d", got)
-	}
-	if got := defaultPage(-1); got != 1 {
-		t.Errorf("expected 1, got %d", got)
-	}
-}
-
-func TestDefaultPage_Valid(t *testing.T) {
-	if got := defaultPage(1); got != 1 {
-		t.Errorf("expected 1, got %d", got)
-	}
-	if got := defaultPage(5); got != 5 {
-		t.Errorf("expected 5, got %d", got)
 	}
 }
 
@@ -88,8 +74,8 @@ func TestEntityToMap_SimpleStruct(t *testing.T) {
 
 	if v, ok := m["name"]; !ok {
 		t.Error("expected name field")
-	} else if v != "Test" {
-		t.Errorf("expected name=Test, got %v", v)
+	} else if !strings.Contains(v.(string), "<untrusted_content>") || !strings.Contains(v.(string), "Test") {
+		t.Errorf("expected framed name, got %v", v)
 	}
 }
 
@@ -184,5 +170,41 @@ func TestErrorResult(t *testing.T) {
 	}
 	if len(result.Content) != 1 {
 		t.Fatalf("expected 1 content item, got %d", len(result.Content))
+	}
+}
+
+func TestSearchResult(t *testing.T) {
+	items := []map[string]any{
+		{"id": float64(101), "companyName": "Acme Corp", "phone": "555-1234"},
+		{"id": float64(102), "companyName": "Beta Inc", "phone": "555-5678"},
+	}
+
+	result, _, err := searchResult(context.Background(), nil, items, "autotask_search_companies", 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("expected valid non-error result: %v", result)
+	}
+
+	textContent, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatal("expected TextContent")
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &resp); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	summary, ok := resp["summary"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected summary object: %v", resp)
+	}
+	if summary["returned"] != float64(2) {
+		t.Errorf("expected returned=2, got %v", summary["returned"])
+	}
+	if summary["hasMore"] != false {
+		t.Errorf("expected hasMore=false, got %v", summary["hasMore"])
 	}
 }

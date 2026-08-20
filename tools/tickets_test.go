@@ -325,8 +325,7 @@ func TestSearchTicketsHandler_WithFilters(t *testing.T) {
 		CompanyID:    1001,
 		Status:       1,
 		CreatedAfter: "2024-01-01T00:00:00Z",
-		Page:         1,
-		PageSize:     10,
+		MaxResults:   10,
 	}
 
 	result, _, err := handler(ctx, nil, in)
