@@ -63,6 +63,12 @@ func (m *MappingCache) GetCompanyName(ctx context.Context, id int64) string {
 
 	raw, err := autotask.GetRaw(ctx, m.client, "Companies", id)
 	if err != nil {
+		// Do not poison the (now process-wide shared) cache with a transient
+		// failure: a cancelled or timed-out request would otherwise mask this ID
+		// as "Unknown" for the full TTL across every subsequent request.
+		if ctx.Err() != nil {
+			return unknownName(id)
+		}
 		return m.cacheAndReturn(m.companies, id, unknownName(id))
 	}
 
@@ -90,6 +96,10 @@ func (m *MappingCache) GetResourceName(ctx context.Context, id int64) string {
 
 	raw, err := autotask.GetRaw(ctx, m.client, "Resources", id)
 	if err != nil {
+		// See GetCompanyName: never negative-cache a transient/context failure.
+		if ctx.Err() != nil {
+			return unknownName(id)
+		}
 		return m.cacheAndReturn(m.resources, id, unknownName(id))
 	}
 

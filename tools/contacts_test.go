@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -95,8 +96,10 @@ func TestCreateContactHandler_Success(t *testing.T) {
 	}
 
 	m := parseStructuredContent[map[string]any](t, result)
-	if m["firstName"] != "Alice" {
-		t.Errorf("expected firstName='Alice', got %v", m["firstName"])
+	// firstName is now framed as untrusted content (contacts are externally supplied),
+	// so assert the resolved name survives rather than an exact-string match.
+	if fn, ok := m["firstName"].(string); !ok || !strings.Contains(fn, "Alice") {
+		t.Errorf("expected firstName containing 'Alice', got %v", m["firstName"])
 	}
 }
 
@@ -123,4 +126,3 @@ func TestSearchContactsHandler_WithFilters(t *testing.T) {
 		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
 	}
 }
-

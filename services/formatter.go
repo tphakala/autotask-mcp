@@ -1,7 +1,7 @@
 package services
 
 import (
-	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -43,7 +43,23 @@ var untrustedFields = []string{
 	"problemDescription", "resolution", "internalNotes", "cause", "name",
 	"projectName", "companyName", "referenceTitle", "referenceName",
 	"fileName", "serviceName", "serviceBundleName",
+	// Short free-text identity fields that are also externally supplied
+	// (contacts are routinely auto-created from inbound customer email).
+	"firstName", "lastName", "emailAddress", "email", "itemName", "contractName",
+	// Derived reference names inlined from the _enhanced sub-map by pickSummaryFields;
+	// these carry the same customer-controlled text as their source *Name fields.
+	"company", "assignedTo", "resourceName", "projectLead",
 }
+
+// untrustedTagPattern matches a boundary tag tolerating whitespace and case
+// variants (e.g. "</untrusted_content >"), so an attacker cannot slip a
+// near-miss closing tag past the exact-match escaping.
+var untrustedTagPattern = regexp.MustCompile(`(?i)<\s*(/?)\s*untrusted_content\s*>`)
+
+const (
+	untrustedPrefix = "<untrusted_content>\n"
+	untrustedSuffix = "\n</untrusted_content>"
+)
 
 // FrameUntrustedContent wraps external user-supplied text with untrusted data boundary markers,
 // escaping any inner boundary tags to prevent breakout.
@@ -51,13 +67,16 @@ func FrameUntrustedContent(content string) string {
 	if content == "" {
 		return content
 	}
-	if strings.HasPrefix(content, "<untrusted_content>\n") && strings.HasSuffix(content, "\n</untrusted_content>") {
-		inner := content[len("<untrusted_content>\n") : len(content)-len("\n</untrusted_content>")]
-		content = inner
+	// Strip one layer of our own prior framing for idempotency. The length guard
+	// prevents an inverted slice when the value is a bare wrapper with no inner
+	// content (prefix and suffix share the newline, so a 40-byte overlap would
+	// otherwise compute content[20:19] and panic).
+	if len(content) >= len(untrustedPrefix)+len(untrustedSuffix) &&
+		strings.HasPrefix(content, untrustedPrefix) && strings.HasSuffix(content, untrustedSuffix) {
+		content = content[len(untrustedPrefix) : len(content)-len(untrustedSuffix)]
 	}
-	sanitized := strings.ReplaceAll(content, "</untrusted_content>", "&lt;/untrusted_content&gt;")
-	sanitized = strings.ReplaceAll(sanitized, "<untrusted_content>", "&lt;untrusted_content&gt;")
-	return fmt.Sprintf("<untrusted_content>\n%s\n</untrusted_content>", sanitized)
+	sanitized := untrustedTagPattern.ReplaceAllString(content, "&lt;${1}untrusted_content&gt;")
+	return untrustedPrefix + sanitized + untrustedSuffix
 }
 
 // FrameUntrustedMapFields inspects known external user-supplied fields on an entity map

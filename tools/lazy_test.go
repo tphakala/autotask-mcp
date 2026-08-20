@@ -309,4 +309,3 @@ func TestRouter_FallbackToListCategories(t *testing.T) {
 		t.Errorf("expected fallback to autotask_list_categories, got %v", resp.SuggestedTool)
 	}
 }
-

@@ -244,8 +244,38 @@ func TestMaskSecret(t *testing.T) {
 	if s := maskSecret("12345678"); s != "12****78" {
 		t.Errorf("maskSecret(\"12345678\") = %q, want 12****78", s)
 	}
-	// Multi-byte UTF-8 test
-	if s := maskSecret("🔑🔒secret🛡️"); s != "🔑🔒****🛡️" && len(s) == 0 {
-		t.Errorf("maskSecret with UTF-8 failed, got: %s", s)
+	// Multi-byte UTF-8: masking must operate on runes, not bytes. 🛡️ is two code
+	// points (U+1F6E1 + U+FE0F), so the 10-rune input keeps the first 2 and last 2
+	// runes and masks the middle 6. Byte-slicing would corrupt the output here.
+	if s := maskSecret("🔑🔒secret🛡️"); s != "🔑🔒******🛡️" {
+		t.Errorf("maskSecret(UTF-8) = %q, want %q", s, "🔑🔒******🛡️")
+	}
+}
+
+// TestGetConfigField_UnsetPointerKeys pins that pointer-backed keys (http_port,
+// lazy_loading) return empty when unset instead of a false "unknown config key".
+func TestGetConfigField_UnsetPointerKeys(t *testing.T) {
+	fc := FileConfig{Username: "alice"}
+
+	for _, key := range []string{"http_port", "httpport", "lazy_loading", "lazyloading"} {
+		val, err := getConfigField(fc, key)
+		if err != nil {
+			t.Errorf("getConfigField(%q) unset: unexpected error %v", key, err)
+		}
+		if val != "" {
+			t.Errorf("getConfigField(%q) unset: expected empty, got %q", key, val)
+		}
+	}
+
+	// A genuinely unknown key must still error.
+	if _, err := getConfigField(fc, "bogus"); err == nil {
+		t.Error("expected error for unknown key 'bogus'")
+	}
+
+	// A set pointer value must still round-trip.
+	port := 9090
+	fc.HTTPPort = &port
+	if val, err := getConfigField(fc, "http_port"); err != nil || val != "9090" {
+		t.Errorf("getConfigField(http_port) set: got %q, err %v; want 9090", val, err)
 	}
 }

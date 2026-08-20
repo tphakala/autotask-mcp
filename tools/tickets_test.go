@@ -276,4 +276,3 @@ func TestSearchTicketsHandler_UnassignedFilter(t *testing.T) {
 		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
 	}
 }
-

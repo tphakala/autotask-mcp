@@ -169,7 +169,11 @@ func getTicketNoteHandler(client *autotask.Client) func(ctx context.Context, req
 // searchTicketNotesHandler returns a handler that lists notes for a ticket.
 func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		notes, err := autotask.ListChild[entities.Ticket, entities.TicketNote](ctx, client, in.TicketID)
+		// Use ListChildRaw (not ListChild + entitiesToMaps) so the note body is
+		// truncated BEFORE it is framed. entitiesToMaps frames via entityToMap, and
+		// truncating an already-framed body severs the closing boundary marker and
+		// leaves a stray escaped tag. This mirrors the project/company note handlers.
+		notes, err := autotask.ListChildRaw(ctx, client, "Tickets", in.TicketID, "TicketNotes")
 		if err != nil {
 			var notFound *autotask.NotFoundError
 			if errors.As(err, &notFound) {
@@ -188,12 +192,7 @@ func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context,
 			notes = notes[:maxResults]
 		}
 
-		maps, err := entitiesToMaps(notes)
-		if err != nil {
-			return nil, services.CompactResponse{}, err
-		}
-
-		for _, m := range maps {
+		for _, m := range notes {
 			truncateNoteBody(m)
 			services.FrameUntrustedMapFields(m)
 		}
@@ -205,12 +204,12 @@ func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context,
 
 		return nil, services.CompactResponse{
 			Summary: services.CompactSummary{
-				Returned:   len(maps),
+				Returned:   len(notes),
 				HasMore:    hasMore,
 				MaxResults: maxResults,
 				Hint:       hint,
 			},
-			Items: maps,
+			Items: notes,
 		}, nil
 	}
 }

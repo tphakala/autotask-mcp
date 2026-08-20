@@ -159,4 +159,3 @@ func TestCreateExpenseItemHandler_Success(t *testing.T) {
 		t.Errorf("expected description to contain 'Team lunch', got %v", m["description"])
 	}
 }
-

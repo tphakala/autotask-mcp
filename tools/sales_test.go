@@ -206,4 +206,3 @@ func TestSearchServiceBundlesHandler_NoResults(t *testing.T) {
 		t.Errorf("expected 0 returned bundles, got %d", resp.Summary.Returned)
 	}
 }
-
