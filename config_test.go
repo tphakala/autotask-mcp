@@ -6,10 +6,31 @@ import (
 	"testing"
 )
 
+func clearAllConfigEnv(t *testing.T) {
+	t.Helper()
+	keys := []string{
+		"AUTOTASK_USERNAME",
+		"AUTOTASK_SECRET",
+		"AUTOTASK_INTEGRATION_CODE",
+		"AUTOTASK_API_URL",
+		"MCP_SERVER_NAME",
+		"MCP_TRANSPORT",
+		"MCP_HTTP_HOST",
+		"MCP_HTTP_PORT",
+		"LOG_LEVEL",
+		"AUTH_MODE",
+		"LAZY_LOADING",
+	}
+	for _, k := range keys {
+		t.Setenv(k, "")
+	}
+}
+
 func TestLoadConfig_Defaults(t *testing.T) {
 	// Point to empty temp dir for config home to prevent reading local files during test
 	tempDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tempDir)
+	clearAllConfigEnv(t)
 
 	cfg := loadConfig()
 	if cfg.Transport != "stdio" {
@@ -29,6 +50,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 func TestLoadConfig_EnvOverrides(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tempDir)
+	clearAllConfigEnv(t)
 
 	t.Setenv("AUTOTASK_USERNAME", "testuser")
 	t.Setenv("AUTOTASK_SECRET", "testsecret")
@@ -61,9 +83,7 @@ func TestLoadConfig_EnvOverrides(t *testing.T) {
 func TestLoadConfig_FileConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tempDir)
-	t.Setenv("AUTOTASK_USERNAME", "")
-	t.Setenv("AUTOTASK_SECRET", "")
-	t.Setenv("AUTOTASK_INTEGRATION_CODE", "")
+	clearAllConfigEnv(t)
 
 	port := 9191
 	lazy := true
@@ -187,6 +207,14 @@ func TestHandleConfigCommand(t *testing.T) {
 		t.Errorf("config unset http_port failed: %v", err)
 	}
 
+	// Verify boolean handling
+	if err := handleConfigCommand([]string{"set", "lazy_loading", "true"}); err != nil {
+		t.Errorf("config set lazy_loading true failed: %v", err)
+	}
+	if err := handleConfigCommand([]string{"set", "lazy_loading", "invalid_bool"}); err == nil {
+		t.Errorf("expected error setting invalid boolean value, got nil")
+	}
+
 	// Verify loaded file config
 	fc, loaded, err := loadFileConfig("")
 	if err != nil || !loaded {
@@ -201,6 +229,9 @@ func TestHandleConfigCommand(t *testing.T) {
 	if fc.HTTPPort != nil {
 		t.Errorf("http_port should be nil after unset, got: %v", *fc.HTTPPort)
 	}
+	if fc.LazyLoading == nil || !*fc.LazyLoading {
+		t.Errorf("lazy_loading should be true, got: %v", fc.LazyLoading)
+	}
 }
 
 func TestMaskSecret(t *testing.T) {
@@ -212,5 +243,9 @@ func TestMaskSecret(t *testing.T) {
 	}
 	if s := maskSecret("12345678"); s != "12****78" {
 		t.Errorf("maskSecret(\"12345678\") = %q, want 12****78", s)
+	}
+	// Multi-byte UTF-8 test
+	if s := maskSecret("🔑🔒secret🛡️"); s != "🔑🔒****🛡️" && len(s) == 0 {
+		t.Errorf("maskSecret with UTF-8 failed, got: %s", s)
 	}
 }

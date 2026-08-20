@@ -117,11 +117,31 @@ func saveFileConfig(path string, fc FileConfig) error {
 	}
 	data = append(data, '\n')
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		return fmt.Errorf("writing config file %s: %w", path, err)
+	tmpFile, err := os.CreateTemp(dir, "config-*.tmp")
+	if err != nil {
+		return fmt.Errorf("creating temp config file in %s: %w", dir, err)
 	}
-	if err := os.Chmod(path, 0600); err != nil {
-		return fmt.Errorf("setting secure permissions on %s: %w", path, err)
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath) //nolint:errcheck // clean up if rename fails
+
+	if err := tmpFile.Chmod(0600); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("setting secure permissions on temp file: %w", err)
+	}
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("writing temp config file: %w", err)
+	}
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("syncing temp config file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("closing temp config file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("atomically replacing config file %s: %w", path, err)
 	}
 
 	return nil
@@ -385,8 +405,16 @@ func setConfigField(fc *FileConfig, key, val string) error {
 			fc.LazyLoading = nil
 			return nil
 		}
-		b := strings.ToLower(val) == "true" || val == "1"
-		fc.LazyLoading = &b
+		switch strings.ToLower(val) {
+		case "true", "1":
+			b := true
+			fc.LazyLoading = &b
+		case "false", "0":
+			b := false
+			fc.LazyLoading = &b
+		default:
+			return fmt.Errorf("invalid boolean value %q for %s: must be true or false", val, key)
+		}
 	default:
 		return fmt.Errorf("unknown config key %q", key)
 	}

@@ -179,12 +179,17 @@ func checkPermissionsDoctor(ctx context.Context, client *autotask.Client, ticket
 		if entity == "Tickets" && ticketInfo != nil {
 			info = ticketInfo
 		} else {
-			info, err = metadata.GetEntityInfo(ctx, client, entity)
+			reqCtx, reqCancel := context.WithTimeout(ctx, 10*time.Second)
+			info, err = metadata.GetEntityInfo(reqCtx, client, entity)
+			reqCancel()
 			if err != nil || info == nil {
 				_, _ = fmt.Fprintf(out, "%-16s [ERROR: %v]\n", entity, err)
 				allPermsOk = false
 				continue
 			}
+		}
+		if !info.CanQuery {
+			allPermsOk = false
 		}
 		_, _ = fmt.Fprintf(out, "%-16s %-12v %-12v %-12v %-12v\n",
 			entity, info.CanCreate, info.CanUpdate, info.CanQuery, info.CanDelete)

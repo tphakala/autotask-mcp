@@ -22,7 +22,7 @@ Provides AI assistants (Claude, GPT, etc.) with structured access to Autotask da
 Set credentials via environment variables or the configuration CLI:
 
 ```bash
-# Option A: Using the config CLI (stores securely in ~/.config/autotask-mcp/config.json with 0600 permissions)
+# Option A: Using the config CLI (stores securely in $XDG_CONFIG_HOME or ~/.config/autotask-mcp/config.json with 0600 permissions)
 autotask-mcp config set username api_user@company.com
 autotask-mcp config set secret your_secret
 autotask-mcp config set integration_code YOUR_CODE
