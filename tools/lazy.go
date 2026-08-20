@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
+	autotask "github.com/tphakala/go-autotask"
 )
 
 // CategoryInfo describes a category of tools.
@@ -169,8 +171,125 @@ type RouterInput struct {
 	Intent string `json:"intent" jsonschema:"Natural language description of what you want to do"`
 }
 
+// ToolRunner represents a dynamic dispatch function for executing a tool with generic JSON arguments.
+type ToolRunner func(ctx context.Context, rawArgs map[string]any) (*mcp.CallToolResult, any, error)
+
+// makeRunner converts a typed MCP tool handler into a dynamic ToolRunner.
+func makeRunner[In any](handler func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, any, error)) ToolRunner {
+	return func(ctx context.Context, rawArgs map[string]any) (*mcp.CallToolResult, any, error) {
+		if handler == nil {
+			return errorResult("tool handler is not configured")
+		}
+		var in In
+		if len(rawArgs) > 0 {
+			data, err := json.Marshal(rawArgs)
+			if err != nil {
+				return errorResult("failed to encode tool arguments: %v", err)
+			}
+			if err := json.Unmarshal(data, &in); err != nil {
+				return errorResult("failed to decode arguments into target parameter schema: %v", err)
+			}
+		}
+		return handler(ctx, nil, in)
+	}
+}
+
+// buildToolDispatcher builds the internal dispatcher mapping tool names to their execution runners.
+func buildToolDispatcher(client *autotask.Client, mapper *services.MappingCache, picklist *services.PicklistCache) map[string]ToolRunner {
+	return map[string]ToolRunner{
+		// Connection
+		"autotask_test_connection": makeRunner(testConnectionHandler(client)),
+
+		// Picklists and metadata
+		"autotask_list_queues":            makeRunner(listQueuesHandler(picklist)),
+		"autotask_list_ticket_statuses":   makeRunner(listTicketStatusesHandler(picklist)),
+		"autotask_list_ticket_priorities": makeRunner(listTicketPrioritiesHandler(picklist)),
+		"autotask_get_field_info":         makeRunner(getFieldInfoHandler(picklist)),
+
+		// Companies
+		"autotask_search_companies": makeRunner(searchCompaniesHandler(client, mapper)),
+		"autotask_create_company":   makeRunner(createCompanyHandler(client)),
+		"autotask_update_company":   makeRunner(updateCompanyHandler(client)),
+
+		// Contacts
+		"autotask_search_contacts": makeRunner(searchContactsHandler(client, mapper)),
+		"autotask_create_contact":  makeRunner(createContactHandler(client)),
+
+		// Tickets
+		"autotask_search_tickets":     makeRunner(searchTicketsHandler(client, mapper)),
+		"autotask_get_ticket_details": makeRunner(getTicketDetailsHandler(client, mapper)),
+		"autotask_create_ticket":      makeRunner(createTicketHandler(client)),
+		"autotask_update_ticket":      makeRunner(updateTicketHandler(client)),
+
+		// Notes
+		"autotask_get_ticket_note":      makeRunner(getTicketNoteHandler(client)),
+		"autotask_search_ticket_notes":  makeRunner(searchTicketNotesHandler(client)),
+		"autotask_create_ticket_note":   makeRunner(createTicketNoteHandler(client)),
+		"autotask_get_project_note":     makeRunner(getProjectNoteHandler(client)),
+		"autotask_search_project_notes": makeRunner(searchProjectNotesHandler(client)),
+		"autotask_create_project_note":  makeRunner(createProjectNoteHandler(client)),
+		"autotask_get_company_note":     makeRunner(getCompanyNoteHandler(client)),
+		"autotask_search_company_notes": makeRunner(searchCompanyNotesHandler(client)),
+		"autotask_create_company_note":  makeRunner(createCompanyNoteHandler(client)),
+
+		// Attachments
+		"autotask_get_ticket_attachment":     makeRunner(getTicketAttachmentHandler(client)),
+		"autotask_search_ticket_attachments": makeRunner(searchTicketAttachmentsHandler(client)),
+
+		// Projects
+		"autotask_search_projects": makeRunner(searchProjectsHandler(client, mapper)),
+		"autotask_create_project":  makeRunner(createProjectHandler(client)),
+
+		// Tasks
+		"autotask_search_tasks": makeRunner(searchTasksHandler(client, mapper)),
+		"autotask_create_task":  makeRunner(createTaskHandler(client)),
+
+		// Time and Billing
+		"autotask_create_time_entry":                   makeRunner(createTimeEntryHandler(client)),
+		"autotask_search_time_entries":                 makeRunner(searchTimeEntriesHandler(client, mapper)),
+		"autotask_search_billing_items":                makeRunner(searchBillingItemsHandler(client, mapper)),
+		"autotask_get_billing_item":                    makeRunner(getBillingItemHandler(client)),
+		"autotask_search_billing_item_approval_levels": makeRunner(searchBillingItemApprovalLevelsHandler(client)),
+		"autotask_get_expense_report":                  makeRunner(getExpenseReportHandler(client)),
+		"autotask_search_expense_reports":              makeRunner(searchExpenseReportsHandler(client)),
+		"autotask_create_expense_report":               makeRunner(createExpenseReportHandler(client)),
+		"autotask_create_expense_item":                 makeRunner(createExpenseItemHandler(client)),
+
+		// Financial
+		"autotask_get_quote":            makeRunner(getQuoteHandler(client)),
+		"autotask_search_quotes":        makeRunner(searchQuotesHandler(client)),
+		"autotask_create_quote":         makeRunner(createQuoteHandler(client)),
+		"autotask_get_quote_item":       makeRunner(getQuoteItemHandler(client)),
+		"autotask_search_quote_items":   makeRunner(searchQuoteItemsHandler(client)),
+		"autotask_create_quote_item":    makeRunner(createQuoteItemHandler(client)),
+		"autotask_update_quote_item":    makeRunner(updateQuoteItemHandler(client)),
+		"autotask_delete_quote_item":    makeRunner(deleteQuoteItemHandler(client)),
+		"autotask_get_opportunity":      makeRunner(getOpportunityHandler(client)),
+		"autotask_search_opportunities": makeRunner(searchOpportunitiesHandler(client)),
+		"autotask_create_opportunity":   makeRunner(createOpportunityHandler(client)),
+		"autotask_search_invoices":      makeRunner(searchInvoicesHandler(client)),
+		"autotask_search_contracts":     makeRunner(searchContractsHandler(client, mapper)),
+
+		// Products and Services
+		"autotask_get_product":            makeRunner(getProductHandler(client)),
+		"autotask_search_products":        makeRunner(searchProductsHandler(client)),
+		"autotask_get_service":            makeRunner(getServiceHandler(client)),
+		"autotask_search_services":        makeRunner(searchServicesHandler(client)),
+		"autotask_get_service_bundle":     makeRunner(getServiceBundleHandler(client)),
+		"autotask_search_service_bundles": makeRunner(searchServiceBundlesHandler(client)),
+
+		// Resources
+		"autotask_search_resources": makeRunner(searchResourcesHandler(client)),
+
+		// Configuration Items
+		"autotask_search_configuration_items": makeRunner(searchConfigurationItemsHandler(client, mapper)),
+	}
+}
+
 // RegisterLazyTools registers the 4 lazy-loading meta-tools with the server.
-func RegisterLazyTools(s *mcp.Server) {
+func RegisterLazyTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache, picklist *services.PicklistCache) {
+	dispatcher := buildToolDispatcher(client, mapper, picklist)
+
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_list_categories",
 		Description: "Enumerate the Autotask tool categories (tickets, companies, projects, financial, and more), each with its description, member tool count, and tool names. Start here in lazy-loading mode to discover which domains exist, then call autotask_list_category_tools to see the tools within one category. Reads the static in-process registry with no Autotask API call. Read-only.",
@@ -185,9 +304,9 @@ func RegisterLazyTools(s *mcp.Server) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_execute_tool",
-		Description: "Return call guidance for a named tool in lazy-loading mode: its description and a suggested arguments payload, since individual entity tools are not registered while lazy loading is enabled. Find the tool name first with autotask_router or autotask_list_category_tools; this does not run the tool, it explains how to invoke it directly or in full mode (LAZY_LOADING=false). Requires toolName. Read-only.",
-		Annotations: localReadTool("Execute tool"),
-	}, executeToolHandler())
+		Description: "Execute a named Autotask tool with arguments in lazy-loading mode. Dispatches the tool call to the internal handler and returns the execution result. Use autotask_router or autotask_list_category_tools to discover tool names and argument schemas. Requires toolName. Open world.",
+		Annotations: &mcp.ToolAnnotations{Title: "Execute tool", OpenWorldHint: new(true)},
+	}, executeToolHandler(dispatcher))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_router",
@@ -269,34 +388,19 @@ func listCategoryToolsHandler() func(ctx context.Context, req *mcp.CallToolReque
 	}
 }
 
-// executeToolHandler returns a handler that provides proxy/guidance for a named tool.
-func executeToolHandler() func(ctx context.Context, req *mcp.CallToolRequest, in ExecuteToolInput) (*mcp.CallToolResult, any, error) {
+// executeToolHandler returns a handler that dynamically dispatches named tools.
+func executeToolHandler(dispatcher map[string]ToolRunner) func(ctx context.Context, req *mcp.CallToolRequest, in ExecuteToolInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in ExecuteToolInput) (*mcp.CallToolResult, any, error) {
 		if in.ToolName == "" {
 			return errorResult("toolName is required")
 		}
 
-		desc := toolDescriptions[in.ToolName]
-		if desc == "" {
-			desc = "unknown tool"
+		runner, ok := dispatcher[in.ToolName]
+		if !ok || runner == nil {
+			return errorResult("unknown tool %q; call autotask_list_categories or autotask_router to discover available tools", in.ToolName)
 		}
 
-		var argHint string
-		if len(in.Arguments) > 0 {
-			data, err := json.Marshal(in.Arguments)
-			if err != nil {
-				argHint = "{}"
-			} else {
-				argHint = string(data)
-			}
-		} else {
-			argHint = "{}"
-		}
-
-		return textResult(
-			"Please call the tool directly: %s\nDescription: %s\nSuggested arguments: %s\n\nIn lazy-loading mode, individual tools are not registered. Switch to full mode (LAZY_LOADING=false) to call tools directly, or use the MCP client to invoke the named tool.",
-			in.ToolName, desc, argHint,
-		)
+		return runner(ctx, in.Arguments)
 	}
 }
 
