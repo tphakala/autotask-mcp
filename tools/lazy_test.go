@@ -7,12 +7,18 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
+	"github.com/tphakala/go-autotask/autotasktest"
 )
 
 func TestRegisterLazyTools_DoesNotPanic(t *testing.T) {
+	_, client := autotasktest.NewServer(t)
+	mapper := services.NewMappingCache(client)
+	picklist := services.NewPicklistCache(client)
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "v0.0.1"}, nil)
+
 	// Should not panic.
-	RegisterLazyTools(s)
+	RegisterLazyTools(s, client, mapper, picklist)
 }
 
 func TestListCategories_ReturnsExpectedCategories(t *testing.T) {
@@ -124,31 +130,66 @@ func TestListCategoryTools_UnknownCategory(t *testing.T) {
 	}
 }
 
-func TestExecuteTool_ProxyResponse(t *testing.T) {
-	handler := executeToolHandler()
+func TestExecuteTool_DispatchesRealTool(t *testing.T) {
+	ticket := autotasktest.TicketFixture()
+	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(ticket))
+	mapper := services.NewMappingCache(client)
+	picklist := services.NewPicklistCache(client)
+	dispatcher := buildToolDispatcher(client, mapper, picklist)
+
+	handler := executeToolHandler(dispatcher)
 
 	result, _, err := handler(context.Background(), nil, ExecuteToolInput{
 		ToolName:  "autotask_search_tickets",
-		Arguments: map[string]any{"status": 1},
+		Arguments: map[string]any{"maxResults": 10},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result == nil || result.IsError {
-		t.Fatal("expected successful result")
+		t.Fatalf("expected successful execution result, got: %v", result)
 	}
 
 	textContent, ok := result.Content[0].(*mcp.TextContent)
 	if !ok {
 		t.Fatal("expected TextContent")
 	}
-	if !strings.Contains(textContent.Text, "autotask_search_tickets") {
-		t.Errorf("expected response to mention tool name, got: %s", textContent.Text)
+	if !strings.Contains(textContent.Text, "items") && !strings.Contains(textContent.Text, "ticketNumber") {
+		t.Errorf("expected executed tool result to return ticket data, got: %s", textContent.Text)
+	}
+}
+
+func TestExecuteTool_UnknownTool(t *testing.T) {
+	_, client := autotasktest.NewServer(t)
+	mapper := services.NewMappingCache(client)
+	picklist := services.NewPicklistCache(client)
+	dispatcher := buildToolDispatcher(client, mapper, picklist)
+
+	handler := executeToolHandler(dispatcher)
+
+	result, _, err := handler(context.Background(), nil, ExecuteToolInput{
+		ToolName: "nonexistent_tool_name",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected IsError=true for unknown tool")
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected at least one content item")
+	}
+	textContent, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatal("expected TextContent")
+	}
+	if !strings.Contains(textContent.Text, "unknown tool") {
+		t.Errorf("expected error message to mention unknown tool, got: %s", textContent.Text)
 	}
 }
 
 func TestExecuteTool_EmptyToolName(t *testing.T) {
-	handler := executeToolHandler()
+	handler := executeToolHandler(nil)
 
 	result, _, err := handler(context.Background(), nil, ExecuteToolInput{ToolName: ""})
 	if err != nil {
@@ -156,6 +197,21 @@ func TestExecuteTool_EmptyToolName(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for empty toolName")
+	}
+}
+
+func TestDispatcher_AllCategoryToolsCovered(t *testing.T) {
+	_, client := autotasktest.NewServer(t)
+	mapper := services.NewMappingCache(client)
+	picklist := services.NewPicklistCache(client)
+	dispatcher := buildToolDispatcher(client, mapper, picklist)
+
+	for catName, cat := range ToolCategories {
+		for _, toolName := range cat.Tools {
+			if _, ok := dispatcher[toolName]; !ok {
+				t.Errorf("tool %q in category %q is not covered by dispatcher", toolName, catName)
+			}
+		}
 	}
 }
 

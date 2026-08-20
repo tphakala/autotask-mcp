@@ -19,14 +19,62 @@ Provides AI assistants (Claude, GPT, etc.) with structured access to Autotask da
 
 ### Stdio (Claude Desktop / Claude Code)
 
+Set credentials via environment variables or the configuration CLI:
+
 ```bash
-# Set credentials
+# Option A: Using the config CLI (stores securely in $XDG_CONFIG_HOME or ~/.config/autotask-mcp/config.json with 0600 permissions)
+autotask-mcp config set username api_user@company.com
+autotask-mcp config set secret your_secret
+autotask-mcp config set integration_code YOUR_CODE
+
+# Option B: Using environment variables
 export AUTOTASK_USERNAME=api_user@company.com
 export AUTOTASK_SECRET=your_secret
 export AUTOTASK_INTEGRATION_CODE=YOUR_CODE
 
-# Run
+# Run pre-flight diagnostics
+autotask-mcp --doctor
+
+# Run server
 go run .
+```
+
+### Pre-flight Diagnostics (Doctor Mode)
+
+Run `autotask-mcp --doctor` to verify your configuration, API credentials, zone routing, and core entity permissions before launching the MCP server:
+
+```bash
+autotask-mcp --doctor
+```
+
+Doctor mode checks:
+- Configuration file location and file permissions (0600 check)
+- Credential completeness and resolution source (environment vs config file)
+- REST API connectivity and round-trip latency
+- Core entity permissions (Tickets, Companies, Contacts, TimeEntries, Resources)
+
+### Configuration CLI
+
+The `autotask-mcp config` command manages persistent file-based settings in `$XDG_CONFIG_HOME/autotask-mcp/config.json` (defaults to `~/.config/autotask-mcp/config.json`):
+
+```bash
+# Display the active config file path
+autotask-mcp config path
+
+# View all configured settings (secrets are masked)
+autotask-mcp config get
+
+# Get a specific value
+autotask-mcp config get username
+
+# Set configuration values (creates file with secure 0600 permissions)
+autotask-mcp config set username api_user@company.com
+autotask-mcp config set secret your_secret
+autotask-mcp config set integration_code YOUR_CODE
+autotask-mcp config set lazy_loading true
+
+# Remove a configuration key
+autotask-mcp config unset lazy_loading
 ```
 
 ### Claude Desktop Configuration
@@ -75,20 +123,22 @@ X-API-Secret: secret
 X-Integration-Code: code
 ```
 
-## Environment Variables
+## Configuration Options
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AUTOTASK_USERNAME` | (required) | Autotask API username for env mode |
-| `AUTOTASK_SECRET` | (required) | Autotask API secret for env mode |
-| `AUTOTASK_INTEGRATION_CODE` | (required) | Autotask integration code for env mode |
-| `AUTOTASK_API_URL` | auto-discovered | Override API base URL |
-| `MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `http` |
-| `MCP_HTTP_PORT` | `8080` | HTTP server port |
-| `MCP_HTTP_HOST` | `0.0.0.0` | HTTP server bind address |
-| `AUTH_MODE` | `env` | Authentication: `env` or `gateway` |
-| `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
-| `LAZY_LOADING` | `false` | Enable progressive tool discovery |
+Configuration can be provided via environment variables or file configuration (`~/.config/autotask-mcp/config.json`). Environment variables take precedence over file configuration.
+
+| Variable / Key | Default | Description |
+|---|---|---|
+| `AUTOTASK_USERNAME` / `username` | (required) | Autotask API username |
+| `AUTOTASK_SECRET` / `secret` | (required) | Autotask API secret |
+| `AUTOTASK_INTEGRATION_CODE` / `integration_code` | (required) | Autotask integration code |
+| `AUTOTASK_API_URL` / `api_url` | auto-discovered | Override API base URL |
+| `MCP_TRANSPORT` / `transport` | `stdio` | Transport: `stdio` or `http` |
+| `MCP_HTTP_PORT` / `http_port` | `8080` | HTTP server port |
+| `MCP_HTTP_HOST` / `http_host` | `0.0.0.0` | HTTP server bind address |
+| `AUTH_MODE` / `auth_mode` | `env` | Authentication mode: `env` or `gateway` |
+| `LOG_LEVEL` / `log_level` | `info` | Log level: `debug`, `info`, `warn`, `error` |
+| `LAZY_LOADING` / `lazy_loading` | `false` | Enable progressive tool discovery and proxying |
 
 ## Available Tools
 

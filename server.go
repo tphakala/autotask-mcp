@@ -25,16 +25,26 @@ SECURITY GUIDANCE:
 // buildServer creates and configures an MCP server with all tool handlers registered.
 // When lazyLoading is true, only 4 meta-tools are registered for progressive discovery.
 func buildServer(client *autotask.Client, lazyLoading bool) *mcp.Server {
+	return buildServerWithCaches(client, lazyLoading, nil, nil)
+}
+
+// buildServerWithCaches creates an MCP server using pre-instantiated mapping and picklist caches.
+func buildServerWithCaches(client *autotask.Client, lazyLoading bool, mapper *services.MappingCache, picklist *services.PicklistCache) *mcp.Server {
 	s := mcp.NewServer(
 		&mcp.Implementation{Name: "autotask-mcp", Version: version},
 		&mcp.ServerOptions{Instructions: serverInstructions},
 	)
 
+	if mapper == nil {
+		mapper = services.NewMappingCache(client)
+	}
+	if picklist == nil {
+		picklist = services.NewPicklistCache(client)
+	}
+
 	if lazyLoading {
-		tools.RegisterLazyTools(s)
+		tools.RegisterLazyTools(s, client, mapper, picklist)
 	} else {
-		mapper := services.NewMappingCache(client)
-		picklist := services.NewPicklistCache(client)
 		tools.RegisterAll(s, client, mapper, picklist)
 	}
 	resources.RegisterAll(s, client)
@@ -91,7 +101,11 @@ func runStdio(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 // runHTTP starts the MCP server over HTTP with streamable transport.
 func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
-	var sharedClient *autotask.Client
+	var (
+		sharedClient *autotask.Client
+		mapper       *services.MappingCache
+		picklist     *services.PicklistCache
+	)
 
 	if cfg.AuthMode == "env" {
 		// Validate credentials
@@ -120,12 +134,15 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			return fmt.Errorf("creating autotask client: %w", err)
 		}
 		defer sharedClient.Close() //nolint:errcheck
+
+		mapper = services.NewMappingCache(sharedClient)
+		picklist = services.NewPicklistCache(sharedClient)
 	}
 
 	// Factory function returns an *mcp.Server for each request.
 	getServer := func(r *http.Request) *mcp.Server {
 		if cfg.AuthMode == "env" {
-			return buildServer(sharedClient, cfg.LazyLoading)
+			return buildServerWithCaches(sharedClient, cfg.LazyLoading, mapper, picklist)
 		}
 
 		// Gateway mode: extract credentials from request headers.
@@ -167,7 +184,7 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 
 	mcpHandler := mcp.NewStreamableHTTPHandler(getServer, &mcp.StreamableHTTPOptions{
-		Logger:               logger,
+		Logger:                logger,
 		CrossOriginProtection: &http.CrossOriginProtection{},
 	})
 
@@ -192,12 +209,18 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	done := make(chan struct{})
+	defer close(done)
+
 	// Graceful shutdown: drain active connections before closing.
 	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		_ = httpServer.Shutdown(shutdownCtx)
+		select {
+		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			_ = httpServer.Shutdown(shutdownCtx)
+		case <-done:
+		}
 	}()
 
 	logger.Info("autotask-mcp HTTP server listening", "addr", addr, "authMode", cfg.AuthMode)
