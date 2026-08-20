@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
 )
@@ -16,7 +17,8 @@ type GetTicketNoteInput struct {
 
 // SearchTicketNotesInput defines the input parameters for searching ticket notes.
 type SearchTicketNotesInput struct {
-	TicketID int64 `json:"ticketId" jsonschema:"Ticket ID to list notes for"`
+	TicketID   int64 `json:"ticketId" jsonschema:"Ticket ID to list notes for"`
+	MaxResults int   `json:"maxResults,omitempty" jsonschema:"Max notes to return (default 25, max 100)"`
 }
 
 // CreateTicketNoteInput defines the input parameters for creating a ticket note.
@@ -35,7 +37,8 @@ type GetProjectNoteInput struct {
 
 // SearchProjectNotesInput defines the input parameters for searching project notes.
 type SearchProjectNotesInput struct {
-	ProjectID int64 `json:"projectId" jsonschema:"Project ID to list notes for"`
+	ProjectID  int64 `json:"projectId" jsonschema:"Project ID to list notes for"`
+	MaxResults int   `json:"maxResults,omitempty" jsonschema:"Max notes to return (default 25, max 100)"`
 }
 
 // CreateProjectNoteInput defines the input parameters for creating a project note.
@@ -53,7 +56,8 @@ type GetCompanyNoteInput struct {
 
 // SearchCompanyNotesInput defines the input parameters for searching company notes.
 type SearchCompanyNotesInput struct {
-	CompanyID int64 `json:"companyId" jsonschema:"Company ID to list notes for"`
+	CompanyID  int64 `json:"companyId" jsonschema:"Company ID to list notes for"`
+	MaxResults int   `json:"maxResults,omitempty" jsonschema:"Max notes to return (default 25, max 100)"`
 }
 
 // CreateCompanyNoteInput defines the input parameters for creating a company note.
@@ -64,17 +68,30 @@ type CreateCompanyNoteInput struct {
 	ActionType  int    `json:"actionType,omitempty" jsonschema:"Action type ID"`
 }
 
+const maxNoteSummaryLength = 500
+
+func truncateNoteBody(m map[string]any) {
+	for _, field := range []string{"description", "note"} {
+		if val, ok := m[field].(string); ok {
+			runes := []rune(val)
+			if len(runes) > maxNoteSummaryLength {
+				m[field] = string(runes[:maxNoteSummaryLength]) + "\n... [truncated for search, use get note tool for full text]"
+			}
+		}
+	}
+}
+
 // RegisterNoteTools registers all note-related MCP tools with the server.
 func RegisterNoteTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_ticket_note",
-		Description: "Retrieve one ticket note by its numeric note ID, returning the note title, body, type, and publish scope recorded against a service ticket. Use autotask_search_ticket_notes to list every note on a ticket when you do not yet know the note ID. Read-only.",
+		Description: "Retrieve one ticket note by its numeric note ID, returning the complete note title, body, type, and publish scope recorded against a service ticket. Read-only.",
 		Annotations: readOnlyTool("Get ticket note"),
 	}, getTicketNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_ticket_notes",
-		Description: "List every note attached to one service ticket, identified by ticketId, returning each note's title, body, and metadata. Use this to browse a ticket's notes, then autotask_get_ticket_note to fetch a single note once you have its ID. Returns all notes for the ticket without pagination. Read-only.",
+		Description: "List notes attached to one service ticket by ticketId, returning up to maxResults note records (default 25, max 100) with bodies bounded to prevent context explosion. Read-only.",
 		Annotations: readOnlyTool("Search ticket notes"),
 	}, searchTicketNotesHandler(client))
 
@@ -86,13 +103,13 @@ func RegisterNoteTools(s *mcp.Server, client *autotask.Client) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_project_note",
-		Description: "Retrieve one project note by its numeric note ID, returning the note title, body, and type recorded against a project. Use autotask_search_project_notes to list every note on a project when you do not yet know the note ID. Read-only.",
+		Description: "Retrieve one project note by its numeric note ID, returning the complete note title, body, and type recorded against a project. Read-only.",
 		Annotations: readOnlyTool("Get project note"),
 	}, getProjectNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_project_notes",
-		Description: "List every note attached to one project, identified by projectId, returning the raw note records for that project. Use this to browse a project's notes, then autotask_get_project_note to fetch a single note once you have its ID. Returns all notes for the project without pagination. Read-only.",
+		Description: "List notes attached to one project by projectId, returning up to maxResults note records (default 25, max 100) with bodies bounded to prevent context explosion. Read-only.",
 		Annotations: readOnlyTool("Search project notes"),
 	}, searchProjectNotesHandler(client))
 
@@ -104,13 +121,13 @@ func RegisterNoteTools(s *mcp.Server, client *autotask.Client) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_company_note",
-		Description: "Retrieve one company note by its numeric note ID, returning the note name, body, and action type recorded against a company account. Use autotask_search_company_notes to list every note on a company when you do not yet know the note ID. Read-only.",
+		Description: "Retrieve one company note by its numeric note ID, returning the complete note name, body, and action type recorded against a company account. Read-only.",
 		Annotations: readOnlyTool("Get company note"),
 	}, getCompanyNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_company_notes",
-		Description: "List every note attached to one company account, identified by companyId, returning the raw note records for that company. Use this to browse a company's notes, then autotask_get_company_note to fetch a single note once you have its ID. Returns all notes for the company without pagination. Read-only.",
+		Description: "List notes attached to one company account by companyId, returning up to maxResults note records (default 25, max 100) with bodies bounded to prevent context explosion. Read-only.",
 		Annotations: readOnlyTool("Search company notes"),
 	}, searchCompanyNotesHandler(client))
 
@@ -143,7 +160,7 @@ func getTicketNoteHandler(client *autotask.Client) func(ctx context.Context, req
 	}
 }
 
-// searchTicketNotesHandler returns a handler that lists all notes for a ticket.
+// searchTicketNotesHandler returns a handler that lists notes for a ticket.
 func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketNotesInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketNotesInput) (*mcp.CallToolResult, any, error) {
 		notes, err := autotask.ListChild[entities.Ticket, entities.TicketNote](ctx, client, in.TicketID)
@@ -155,9 +172,19 @@ func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context,
 			return textResult("No ticket notes found")
 		}
 
+		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		if len(notes) > maxResults {
+			notes = notes[:maxResults]
+		}
+
 		maps, err := entitiesToMaps(notes)
 		if err != nil {
 			return errorResult("failed to convert ticket notes: %v", err)
+		}
+
+		for _, m := range maps {
+			truncateNoteBody(m)
+			services.FrameUntrustedMapFields(m)
 		}
 
 		data, err := json.MarshalIndent(maps, "", "  ")
@@ -230,7 +257,7 @@ func getProjectNoteHandler(client *autotask.Client) func(ctx context.Context, re
 	}
 }
 
-// searchProjectNotesHandler returns a handler that lists all notes for a project.
+// searchProjectNotesHandler returns a handler that lists notes for a project.
 func searchProjectNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectNotesInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectNotesInput) (*mcp.CallToolResult, any, error) {
 		notes, err := autotask.ListChildRaw(ctx, client, "Projects", in.ProjectID, "ProjectNotes")
@@ -240,6 +267,16 @@ func searchProjectNotesHandler(client *autotask.Client) func(ctx context.Context
 
 		if len(notes) == 0 {
 			return textResult("No project notes found")
+		}
+
+		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		if len(notes) > maxResults {
+			notes = notes[:maxResults]
+		}
+
+		for _, m := range notes {
+			truncateNoteBody(m)
+			services.FrameUntrustedMapFields(m)
 		}
 
 		data, err := json.MarshalIndent(notes, "", "  ")
@@ -307,7 +344,7 @@ func getCompanyNoteHandler(client *autotask.Client) func(ctx context.Context, re
 	}
 }
 
-// searchCompanyNotesHandler returns a handler that lists all notes for a company.
+// searchCompanyNotesHandler returns a handler that lists notes for a company.
 func searchCompanyNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompanyNotesInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompanyNotesInput) (*mcp.CallToolResult, any, error) {
 		notes, err := autotask.ListChildRaw(ctx, client, "Companies", in.CompanyID, "CompanyNotes")
@@ -317,6 +354,16 @@ func searchCompanyNotesHandler(client *autotask.Client) func(ctx context.Context
 
 		if len(notes) == 0 {
 			return textResult("No company notes found")
+		}
+
+		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		if len(notes) > maxResults {
+			notes = notes[:maxResults]
+		}
+
+		for _, m := range notes {
+			truncateNoteBody(m)
+			services.FrameUntrustedMapFields(m)
 		}
 
 		data, err := json.MarshalIndent(notes, "", "  ")

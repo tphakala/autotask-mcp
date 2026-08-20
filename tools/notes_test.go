@@ -2,10 +2,14 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/autotasktest"
+	"github.com/tphakala/go-autotask/entities"
 )
 
 // TestRegisterNoteTools_NoPanic verifies that RegisterNoteTools registers all tools without panicking.
@@ -52,6 +56,55 @@ func TestSearchTicketNotesHandler_WithNotes(t *testing.T) {
 	}
 	if result.IsError {
 		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+	}
+}
+
+// TestSearchTicketNotesHandler_TruncationAndFraming tests that long note bodies are truncated and untrusted content is framed.
+func TestSearchTicketNotesHandler_TruncationAndFraming(t *testing.T) {
+	longDescription := strings.Repeat("A", 600)
+	note := autotasktest.TicketNoteFixture(func(n *entities.TicketNote) {
+		n.Description = autotask.Set(longDescription)
+		n.Title = autotask.Set("Untrusted Note Title")
+	})
+	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(note))
+
+	handler := searchTicketNotesHandler(client)
+	ctx := context.Background()
+
+	result, _, err := handler(ctx, nil, SearchTicketNotesInput{TicketID: 3001, MaxResults: 10})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("expected non-error result, got: %v", result)
+	}
+
+	textContent, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatal("expected TextContent")
+	}
+
+	var notes []map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &notes); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if len(notes) == 0 {
+		t.Fatal("expected at least 1 note")
+	}
+
+	n := notes[0]
+	desc, _ := n["description"].(string)
+	if !strings.Contains(desc, "truncated for search") {
+		t.Errorf("expected description to be truncated, got: %v", desc)
+	}
+	if !strings.Contains(desc, "<untrusted_content>") {
+		t.Errorf("expected description to be framed with untrusted_content tags, got: %v", desc)
+	}
+
+	title, _ := n["title"].(string)
+	if !strings.Contains(title, "<untrusted_content>") {
+		t.Errorf("expected title to be framed with untrusted_content tags, got: %v", title)
 	}
 }
 

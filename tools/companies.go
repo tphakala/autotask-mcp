@@ -14,8 +14,7 @@ import (
 type SearchCompaniesInput struct {
 	SearchTerm string `json:"searchTerm,omitempty" jsonschema:"Search term for company name"`
 	IsActive   *bool  `json:"isActive,omitempty" jsonschema:"Filter by active status"`
-	Page       int    `json:"page,omitempty" jsonschema:"Page number (default 1)"`
-	PageSize   int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 200)"`
+	MaxResults int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 200)"`
 }
 
 // CreateCompanyInput defines the input parameters for creating a new company.
@@ -47,7 +46,7 @@ type UpdateCompanyInput struct {
 func RegisterCompanyTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_companies",
-		Description: "Find companies by name substring and active status, returning a compact paginated summary (25 per page, max 200). Use this to locate a company and its ID for other tools; to add a new company instead use autotask_create_company. Omitting the active filter returns both active and inactive companies. Read-only.",
+		Description: "Find companies by name substring and active status, returning a compact summary of matching records (up to maxResults, default 25, max 200). Use this to locate a company and its ID for other tools; to add a new company instead use autotask_create_company. Omitting the active filter returns both active and inactive companies. Read-only.",
 		Annotations: readOnlyTool("Search companies"),
 	}, searchCompaniesHandler(client, mapper))
 
@@ -67,10 +66,9 @@ func RegisterCompanyTools(s *mcp.Server, client *autotask.Client, mapper *servic
 // searchCompaniesHandler returns a handler that searches companies using the provided filters.
 func searchCompaniesHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompaniesInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompaniesInput) (*mcp.CallToolResult, any, error) {
-		page := defaultPage(in.Page)
-		pageSize := defaultPageSize(in.PageSize, 25, 200)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 200)
 
-		q := autotask.NewQuery().Limit(pageSize)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.SearchTerm != "" {
 			q.Where("companyName", autotask.OpContains, in.SearchTerm)
@@ -93,7 +91,7 @@ func searchCompaniesHandler(client *autotask.Client, mapper *services.MappingCac
 			return errorResult("failed to convert companies: %v", err)
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_companies", page, pageSize)
+		return searchResult(ctx, mapper, maps, "autotask_search_companies", maxResults)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
 )
@@ -12,24 +13,26 @@ import (
 // GetTicketAttachmentInput defines the input parameters for getting a ticket attachment.
 type GetTicketAttachmentInput struct {
 	AttachmentID int64 `json:"attachmentId" jsonschema:"Attachment ID to retrieve"`
+	IncludeData  bool  `json:"includeData,omitempty" jsonschema:"Set to true to include raw base64 file data (defaults to false to conserve context)"`
 }
 
 // SearchTicketAttachmentsInput defines the input parameters for searching ticket attachments.
 type SearchTicketAttachmentsInput struct {
-	TicketID int64 `json:"ticketId" jsonschema:"Ticket ID to list attachments for"`
+	TicketID   int64 `json:"ticketId" jsonschema:"Ticket ID to list attachments for"`
+	MaxResults int   `json:"maxResults,omitempty" jsonschema:"Max attachments to return (default 25, max 100)"`
 }
 
 // RegisterAttachmentTools registers all attachment-related MCP tools with the server.
 func RegisterAttachmentTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_get_ticket_attachment",
-		Description: "Retrieve one ticket attachment by its numeric attachment ID, returning its full record. Use when you already have a specific attachment ID; to list every attachment belonging to a ticket use autotask_search_ticket_attachments instead. Read-only.",
+		Description: "Retrieve one ticket attachment by its numeric attachment ID. Returns attachment metadata by default (title, file size, content type); set includeData=true to retrieve raw base64 file data. Read-only.",
 		Annotations: readOnlyTool("Get ticket attachment"),
 	}, getTicketAttachmentHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_ticket_attachments",
-		Description: "List every attachment belonging to one ticket, identified by its ticketId, returning all attachment records for that ticket without pagination. Use this to discover a ticket's attachments, then autotask_get_ticket_attachment to retrieve one by its attachment ID. Read-only.",
+		Description: "List attachments belonging to one ticket by ticketId, returning up to maxResults metadata records (default 25, max 100) with base64 data and internal file paths omitted. Read-only.",
 		Annotations: readOnlyTool("Search ticket attachments"),
 	}, searchTicketAttachmentsHandler(client))
 }
@@ -47,6 +50,11 @@ func getTicketAttachmentHandler(client *autotask.Client) func(ctx context.Contex
 			return errorResult("failed to convert ticket attachment: %v", err)
 		}
 
+		delete(m, "fullPath")
+		if !in.IncludeData {
+			delete(m, "data")
+		}
+
 		data, err := json.MarshalIndent(m, "", "  ")
 		if err != nil {
 			return errorResult("failed to marshal ticket attachment: %v", err)
@@ -56,7 +64,7 @@ func getTicketAttachmentHandler(client *autotask.Client) func(ctx context.Contex
 	}
 }
 
-// searchTicketAttachmentsHandler returns a handler that lists all attachments for a ticket.
+// searchTicketAttachmentsHandler returns a handler that lists attachments for a ticket without heavy base64 data.
 func searchTicketAttachmentsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketAttachmentsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketAttachmentsInput) (*mcp.CallToolResult, any, error) {
 		attachments, err := autotask.ListChildRaw(ctx, client, "Tickets", in.TicketID, "TicketAttachments")
@@ -66,6 +74,17 @@ func searchTicketAttachmentsHandler(client *autotask.Client) func(ctx context.Co
 
 		if len(attachments) == 0 {
 			return textResult("No ticket attachments found")
+		}
+
+		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		if len(attachments) > maxResults {
+			attachments = attachments[:maxResults]
+		}
+
+		for _, attachment := range attachments {
+			delete(attachment, "data")
+			delete(attachment, "fullPath")
+			services.FrameUntrustedMapFields(attachment)
 		}
 
 		data, err := json.MarshalIndent(attachments, "", "  ")

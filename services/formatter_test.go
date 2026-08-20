@@ -19,7 +19,7 @@ func TestFormatCompactResponse_StripsNonSummaryFields(t *testing.T) {
 		},
 	}
 
-	opts := FormatOptions{Page: 1, PageSize: 25}
+	opts := FormatOptions{MaxResults: 25}
 	resp := FormatCompactResponse(items, "tickets", opts)
 
 	if len(resp.Items) != 1 {
@@ -46,35 +46,44 @@ func TestFormatCompactResponse_StripsNonSummaryFields(t *testing.T) {
 }
 
 func TestFormatCompactResponse_HasMoreTrue(t *testing.T) {
-	// Fill items equal to pageSize; HasMore should be true
-	pageSize := 3
-	items := make([]map[string]any, pageSize)
+	// Fill items equal to maxResults; HasMore should be true
+	maxResults := 3
+	items := make([]map[string]any, maxResults)
 	for i := range items {
 		items[i] = map[string]any{"id": float64(i)}
 	}
 
-	opts := FormatOptions{Page: 1, PageSize: pageSize}
+	opts := FormatOptions{MaxResults: maxResults}
 	resp := FormatCompactResponse(items, "tickets", opts)
 
 	if !resp.Summary.HasMore {
-		t.Error("expected HasMore=true when items.length >= pageSize")
+		t.Error("expected HasMore=true when items.length >= maxResults")
 	}
-	if resp.Summary.Returned != pageSize {
-		t.Errorf("expected Returned=%d, got %d", pageSize, resp.Summary.Returned)
+	if resp.Summary.Returned != maxResults {
+		t.Errorf("expected Returned=%d, got %d", maxResults, resp.Summary.Returned)
+	}
+	if resp.Summary.MaxResults != maxResults {
+		t.Errorf("expected MaxResults=%d, got %d", maxResults, resp.Summary.MaxResults)
+	}
+	if !strings.Contains(resp.Summary.Hint, "Maximum result limit reached") {
+		t.Errorf("unexpected hint: %q", resp.Summary.Hint)
 	}
 }
 
 func TestFormatCompactResponse_HasMoreFalse(t *testing.T) {
-	// items < pageSize, so HasMore should be false
+	// items < maxResults, so HasMore should be false
 	items := []map[string]any{
 		{"id": float64(1)},
 	}
 
-	opts := FormatOptions{Page: 1, PageSize: 25}
+	opts := FormatOptions{MaxResults: 25}
 	resp := FormatCompactResponse(items, "tickets", opts)
 
 	if resp.Summary.HasMore {
-		t.Error("expected HasMore=false when items.length < pageSize")
+		t.Error("expected HasMore=false when items.length < maxResults")
+	}
+	if resp.Summary.Hint != "" {
+		t.Errorf("expected empty hint when HasMore is false, got %q", resp.Summary.Hint)
 	}
 }
 
@@ -92,7 +101,7 @@ func TestFormatCompactResponse_EnhancementFieldsInlined(t *testing.T) {
 		},
 	}
 
-	opts := FormatOptions{Page: 1, PageSize: 25}
+	opts := FormatOptions{MaxResults: 25}
 	resp := FormatCompactResponse(items, "tickets", opts)
 
 	if len(resp.Items) != 1 {
@@ -114,6 +123,45 @@ func TestFormatCompactResponse_EnhancementFieldsInlined(t *testing.T) {
 	// _enhanced should not appear directly
 	if _, ok := item["_enhanced"]; ok {
 		t.Error("_enhanced should not appear in output")
+	}
+}
+
+func TestFrameUntrustedContent(t *testing.T) {
+	if got := FrameUntrustedContent(""); got != "" {
+		t.Errorf("expected empty string, got %q", got)
+	}
+
+	raw := "Hello world"
+	framed := FrameUntrustedContent(raw)
+	if !strings.HasPrefix(framed, "<untrusted_content>\n") || !strings.HasSuffix(framed, "\n</untrusted_content>") {
+		t.Errorf("expected framing markers, got %q", framed)
+	}
+
+	// Double-framing idempotency
+	doubleFramed := FrameUntrustedContent(framed)
+	if doubleFramed != framed {
+		t.Errorf("expected idempotent framing, got %q", doubleFramed)
+	}
+}
+
+func TestFrameUntrustedMapFields(t *testing.T) {
+	m := map[string]any{
+		"id":          int64(123),
+		"title":       "Server outage",
+		"description": "Please restart router",
+		"other":       "unaffected",
+	}
+
+	FrameUntrustedMapFields(m)
+
+	if got := m["title"].(string); !strings.Contains(got, "<untrusted_content>") {
+		t.Errorf("expected title to be framed, got %q", got)
+	}
+	if got := m["description"].(string); !strings.Contains(got, "<untrusted_content>") {
+		t.Errorf("expected description to be framed, got %q", got)
+	}
+	if got := m["other"].(string); strings.Contains(got, "<untrusted_content>") {
+		t.Errorf("expected other to NOT be framed, got %q", got)
 	}
 }
 
@@ -176,7 +224,7 @@ func TestFormatCompactResponse_UnknownEntityType(t *testing.T) {
 		},
 	}
 
-	opts := FormatOptions{Page: 1, PageSize: 25}
+	opts := FormatOptions{MaxResults: 25}
 	resp := FormatCompactResponse(items, "unknownEntity", opts)
 
 	if len(resp.Items) != 1 {

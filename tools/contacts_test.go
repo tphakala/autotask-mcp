@@ -147,8 +147,7 @@ func TestSearchContactsHandler_WithFilters(t *testing.T) {
 		SearchTerm: "Jane",
 		CompanyID:  1001,
 		IsActive:   &active,
-		Page:       1,
-		PageSize:   10,
+		MaxResults: 10,
 	}
 
 	result, _, err := handler(ctx, nil, in)

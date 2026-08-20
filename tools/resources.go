@@ -13,15 +13,14 @@ type SearchResourcesInput struct {
 	SearchTerm   string `json:"searchTerm,omitempty" jsonschema:"Search term for resource name or email"`
 	IsActive     *bool  `json:"isActive,omitempty" jsonschema:"Filter by active status"`
 	ResourceType string `json:"resourceType,omitempty" jsonschema:"Filter by resource type (Employee, Contractor, Temporary)"`
-	Page         int    `json:"page,omitempty" jsonschema:"Page number (default 1)"`
-	PageSize     int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults   int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // RegisterResourceTools registers all resource-related MCP tools with the server.
 func RegisterResourceTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_resources",
-		Description: "Find internal staff (employees, contractors, or temporary workers) of the Autotask account by name or email substring, active status, and resource type, returning a compact paginated summary (25 per page, max 500). Resources are the people assigned to tickets and tasks; for client-side people at a company use autotask_search_contacts instead. Use the returned resource ID as assignedResourceID when creating or updating tickets. Read-only.",
+		Description: "Find internal staff (employees, contractors, or temporary workers) of the Autotask account by name or email substring, active status, and resource type, returning a compact summary of matching records (up to maxResults, default 25, max 500). Resources are the people assigned to tickets and tasks; for client-side people at a company use autotask_search_contacts instead. Use the returned resource ID as assignedResourceID when creating or updating tickets. Read-only.",
 		Annotations: readOnlyTool("Search resources"),
 	}, searchResourcesHandler(client))
 }
@@ -29,9 +28,9 @@ func RegisterResourceTools(s *mcp.Server, client *autotask.Client) {
 // searchResourcesHandler returns a handler that searches resources using the provided filters.
 func searchResourcesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchResourcesInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchResourcesInput) (*mcp.CallToolResult, any, error) {
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 
-		q := autotask.NewQuery().Limit(pageSize)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.SearchTerm != "" {
 			q.Or(
@@ -61,6 +60,6 @@ func searchResourcesHandler(client *autotask.Client) func(ctx context.Context, r
 			return errorResult("failed to convert resources: %v", err)
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_resources", defaultPage(in.Page), pageSize)
+		return searchResult(ctx, nil, maps, "autotask_search_resources", maxResults)
 	}
 }

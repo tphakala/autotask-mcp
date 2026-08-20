@@ -23,7 +23,7 @@ type SearchQuotesInput struct {
 	ContactID     int64  `json:"contactId,omitempty" jsonschema:"Filter by contact ID"`
 	OpportunityID int64  `json:"opportunityId,omitempty" jsonschema:"Filter by opportunity ID"`
 	SearchTerm    string `json:"searchTerm,omitempty" jsonschema:"Search by quote name (partial match)"`
-	PageSize      int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults    int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // CreateQuoteInput defines the input parameters for creating a quote.
@@ -48,7 +48,7 @@ type GetQuoteItemInput struct {
 type SearchQuoteItemsInput struct {
 	QuoteID    int64  `json:"quoteId,omitempty" jsonschema:"Filter by quote ID"`
 	SearchTerm string `json:"searchTerm,omitempty" jsonschema:"Search by item name (partial match)"`
-	PageSize   int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // CreateQuoteItemInput defines the input parameters for creating a quote item.
@@ -100,7 +100,7 @@ type SearchOpportunitiesInput struct {
 	CompanyID  int64  `json:"companyId,omitempty" jsonschema:"Filter by company ID"`
 	SearchTerm string `json:"searchTerm,omitempty" jsonschema:"Search by opportunity title (partial match)"`
 	Status     int    `json:"status,omitempty" jsonschema:"Filter by status ID"`
-	PageSize   int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // CreateOpportunityInput defines the input parameters for creating an opportunity.
@@ -129,7 +129,7 @@ type SearchInvoicesInput struct {
 	CompanyID     int64  `json:"companyID,omitempty" jsonschema:"Filter by company ID"`
 	InvoiceNumber string `json:"invoiceNumber,omitempty" jsonschema:"Filter by invoice number"`
 	IsVoided      *bool  `json:"isVoided,omitempty" jsonschema:"Filter by voided status"`
-	PageSize      int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults    int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // --- Contract inputs ---
@@ -139,7 +139,7 @@ type SearchContractsInput struct {
 	SearchTerm string `json:"searchTerm,omitempty" jsonschema:"Search by contract name (partial match)"`
 	CompanyID  int64  `json:"companyID,omitempty" jsonschema:"Filter by company ID"`
 	Status     int    `json:"status,omitempty" jsonschema:"Filter by status ID"`
-	PageSize   int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // RegisterFinancialTools registers all financial-related MCP tools with the server.
@@ -153,7 +153,7 @@ func RegisterFinancialTools(s *mcp.Server, client *autotask.Client, mapper *serv
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_quotes",
-		Description: "Find sales quotes filtered by company, contact, opportunity, or quote-name substring, returning up to pageSize matches (default 25, max 500). Use this to locate quotes, then autotask_get_quote for the full field set of one quote by its ID. Read-only.",
+		Description: "Find sales quotes filtered by company, contact, opportunity, or quote-name substring, returning up to maxResults matches (default 25, max 500). Use this to locate quotes, then autotask_get_quote for the full field set of one quote by its ID. Read-only.",
 		Annotations: readOnlyTool("Search quotes"),
 	}, searchQuotesHandler(client))
 
@@ -172,7 +172,7 @@ func RegisterFinancialTools(s *mcp.Server, client *autotask.Client, mapper *serv
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_quote_items",
-		Description: "Find line items belonging to a quote, filtered by quoteId or item-name substring, returning up to pageSize matches (default 25, max 500). Use this to list a quote's items, then autotask_get_quote_item for the full field set of one item by its ID. Read-only.",
+		Description: "Find line items belonging to a quote, filtered by quoteId or item-name substring, returning up to maxResults matches (default 25, max 500). Use this to list a quote's items, then autotask_get_quote_item for the full field set of one item by its ID. Read-only.",
 		Annotations: readOnlyTool("Search quote items"),
 	}, searchQuoteItemsHandler(client))
 
@@ -203,7 +203,7 @@ func RegisterFinancialTools(s *mcp.Server, client *autotask.Client, mapper *serv
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_opportunities",
-		Description: "Find sales opportunities filtered by company, title substring, or status, returning up to pageSize matches (default 25, max 500). Use this to locate opportunities, then autotask_get_opportunity for the full field set of one opportunity by its ID. Read-only.",
+		Description: "Find sales opportunities filtered by company, title substring, or status, returning up to maxResults matches (default 25, max 500). Use this to locate opportunities, then autotask_get_opportunity for the full field set of one opportunity by its ID. Read-only.",
 		Annotations: readOnlyTool("Search opportunities"),
 	}, searchOpportunitiesHandler(client))
 
@@ -216,14 +216,14 @@ func RegisterFinancialTools(s *mcp.Server, client *autotask.Client, mapper *serv
 	// Invoices
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_invoices",
-		Description: "Find invoices filtered by company, exact invoice number, or voided status, returning up to pageSize matches (default 25, max 500). This is the only invoice tool; invoices are generated by Autotask billing rather than through this server, and each match is returned with its full field set inline. Read-only.",
+		Description: "Find invoices filtered by company, exact invoice number, or voided status, returning up to maxResults matches (default 25, max 500). This is the only invoice tool; invoices are generated by Autotask billing rather than through this server, and each match is returned with its full field set inline. Read-only.",
 		Annotations: readOnlyTool("Search invoices"),
 	}, searchInvoicesHandler(client))
 
 	// Contracts
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_contracts",
-		Description: "Find customer contracts filtered by company, contract-name substring, or status, returning a compact paginated summary (25 per page, max 500) with resolved reference names. This is the only contract tool; use the returned contract IDs to filter related resources such as tickets and time entries. Read-only.",
+		Description: "Find customer contracts filtered by company, contract-name substring, or status, returning a compact summary of matching records (up to maxResults, default 25, max 500) with resolved reference names. This is the only contract tool; use the returned contract IDs to filter related resources such as tickets and time entries. Read-only.",
 		Annotations: readOnlyTool("Search contracts"),
 	}, searchContractsHandler(client, mapper))
 }
@@ -253,8 +253,8 @@ func getQuoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp
 // searchQuotesHandler returns a handler that searches quotes.
 func searchQuotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuotesInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuotesInput) (*mcp.CallToolResult, any, error) {
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
-		q := autotask.NewQuery().Limit(pageSize)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.CompanyID != 0 {
 			q.Where("companyID", autotask.OpEq, in.CompanyID)
@@ -369,8 +369,8 @@ func getQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req 
 // searchQuoteItemsHandler returns a handler that searches quote items.
 func searchQuoteItemsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuoteItemsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuoteItemsInput) (*mcp.CallToolResult, any, error) {
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
-		q := autotask.NewQuery().Limit(pageSize)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.QuoteID != 0 {
 			q.Where("quoteID", autotask.OpEq, in.QuoteID)
@@ -572,8 +572,8 @@ func getOpportunityHandler(client *autotask.Client) func(ctx context.Context, re
 // searchOpportunitiesHandler returns a handler that searches opportunities.
 func searchOpportunitiesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchOpportunitiesInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchOpportunitiesInput) (*mcp.CallToolResult, any, error) {
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
-		q := autotask.NewQuery().Limit(pageSize)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.CompanyID != 0 {
 			q.Where("companyID", autotask.OpEq, in.CompanyID)
@@ -677,8 +677,8 @@ func createOpportunityHandler(client *autotask.Client) func(ctx context.Context,
 // searchInvoicesHandler returns a handler that searches invoices.
 func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchInvoicesInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchInvoicesInput) (*mcp.CallToolResult, any, error) {
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
-		q := autotask.NewQuery().Limit(pageSize)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.CompanyID != 0 {
 			q.Where("companyID", autotask.OpEq, in.CompanyID)
@@ -716,9 +716,8 @@ func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, re
 // searchContractsHandler returns a handler that searches contracts.
 func searchContractsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchContractsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchContractsInput) (*mcp.CallToolResult, any, error) {
-		page := 1
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
-		q := autotask.NewQuery().Limit(pageSize)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.SearchTerm != "" {
 			q.Where("contractName", autotask.OpContains, in.SearchTerm)
@@ -744,6 +743,6 @@ func searchContractsHandler(client *autotask.Client, mapper *services.MappingCac
 			return errorResult("failed to convert contracts: %v", err)
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_contracts", page, pageSize)
+		return searchResult(ctx, mapper, maps, "autotask_search_contracts", maxResults)
 	}
 }

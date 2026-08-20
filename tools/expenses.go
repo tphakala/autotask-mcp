@@ -18,7 +18,7 @@ type GetExpenseReportInput struct {
 type SearchExpenseReportsInput struct {
 	SubmitterID int64 `json:"submitterId,omitempty" jsonschema:"Filter by submitter resource ID"`
 	Status      int   `json:"status,omitempty" jsonschema:"Filter by report status"`
-	PageSize    int   `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults  int   `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // CreateExpenseReportInput defines the input parameters for creating an expense report.
@@ -52,7 +52,7 @@ func RegisterExpenseTools(s *mcp.Server, client *autotask.Client) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_expense_reports",
-		Description: "Find expense reports filtered by submitter resource or status, returning up to pageSize records (default 25, max 500). Use this to locate reports, then autotask_get_expense_report for one report by ID. Read-only.",
+		Description: "Find expense reports filtered by submitter resource or status, returning up to maxResults records (default 25, max 500). Use this to locate reports, then autotask_get_expense_report for one report by ID. Read-only.",
 		Annotations: readOnlyTool("Search expense reports"),
 	}, searchExpenseReportsHandler(client))
 
@@ -94,8 +94,8 @@ func getExpenseReportHandler(client *autotask.Client) func(ctx context.Context, 
 // searchExpenseReportsHandler returns a handler that searches expense reports.
 func searchExpenseReportsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchExpenseReportsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchExpenseReportsInput) (*mcp.CallToolResult, any, error) {
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
-		q := autotask.NewQuery().Limit(pageSize)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.SubmitterID != 0 {
 			q.Where("submitterID", autotask.OpEq, in.SubmitterID)

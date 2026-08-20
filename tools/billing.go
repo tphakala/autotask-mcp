@@ -24,8 +24,7 @@ type SearchBillingItemsInput struct {
 	InvoiceID    int64  `json:"invoiceId,omitempty" jsonschema:"Filter by invoice ID"`
 	PostedAfter  string `json:"postedAfter,omitempty" jsonschema:"Filter items posted on or after this date (ISO format)"`
 	PostedBefore string `json:"postedBefore,omitempty" jsonschema:"Filter items posted on or before this date (ISO format)"`
-	Page         int    `json:"page,omitempty" jsonschema:"Page number (default 1)"`
-	PageSize     int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults   int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // SearchBillingItemApprovalLevelsInput defines the input for searching billing item approval levels.
@@ -35,8 +34,7 @@ type SearchBillingItemApprovalLevelsInput struct {
 	ApprovalLevel      int    `json:"approvalLevel,omitempty" jsonschema:"Filter by approval level"`
 	ApprovedAfter      string `json:"approvedAfter,omitempty" jsonschema:"Filter items approved on or after this date (ISO format)"`
 	ApprovedBefore     string `json:"approvedBefore,omitempty" jsonschema:"Filter items approved on or before this date (ISO format)"`
-	Page               int    `json:"page,omitempty" jsonschema:"Page number (default 1)"`
-	PageSize           int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 500)"`
+	MaxResults         int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
 // RegisterBillingTools registers all billing-related MCP tools with the server.
@@ -49,13 +47,13 @@ func RegisterBillingTools(s *mcp.Server, client *autotask.Client, mapper *servic
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_billing_items",
-		Description: "Find billing items by company, ticket, project, contract, invoice, or posted-date range, returning a compact paginated summary (25 per page, max 500). Use this to locate billing items, then autotask_get_billing_item for the full field set of one item. Read-only.",
+		Description: "Find billing items by company, ticket, project, contract, invoice, or posted-date range, returning a compact summary of matching records (up to maxResults, default 25, max 500). Use this to locate billing items, then autotask_get_billing_item for the full field set of one item. Read-only.",
 		Annotations: readOnlyTool("Search billing items"),
 	}, searchBillingItemsHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_billing_item_approval_levels",
-		Description: "Find billing-item approval-level records by time entry, approving resource, approval level, or approved-date range, returning a compact paginated summary (25 per page, max 500). These are the approval-chain entries, not billing items themselves; use autotask_search_billing_items for the billing items. Read-only.",
+		Description: "Find billing-item approval-level records by time entry, approving resource, approval level, or approved-date range, returning a compact summary of matching records (up to maxResults, default 25, max 500). Read-only.",
 		Annotations: readOnlyTool("Search billing item approval levels"),
 	}, searchBillingItemApprovalLevelsHandler(client))
 }
@@ -88,9 +86,8 @@ func getBillingItemHandler(client *autotask.Client) func(ctx context.Context, re
 // searchBillingItemsHandler returns a handler that searches billing items.
 func searchBillingItemsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemsInput) (*mcp.CallToolResult, any, error) {
-		page := defaultPage(in.Page)
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
-		q := autotask.NewQuery().Limit(pageSize)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.CompanyID != 0 {
 			q.Where("companyID", autotask.OpEq, in.CompanyID)
@@ -128,16 +125,15 @@ func searchBillingItemsHandler(client *autotask.Client, mapper *services.Mapping
 			return errorResult("failed to convert billing items: %v", err)
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_billing_items", page, pageSize)
+		return searchResult(ctx, mapper, maps, "autotask_search_billing_items", maxResults)
 	}
 }
 
 // searchBillingItemApprovalLevelsHandler returns a handler that searches billing item approval levels.
 func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, any, error) {
-		page := defaultPage(in.Page)
-		pageSize := defaultPageSize(in.PageSize, 25, 500)
-		q := autotask.NewQuery().Limit(pageSize)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.TimeEntryID != 0 {
 			q.Where("timeEntryID", autotask.OpEq, in.TimeEntryID)
@@ -169,6 +165,6 @@ func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx co
 			return errorResult("failed to convert billing item approval levels: %v", err)
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_billing_item_approval_levels", page, pageSize)
+		return searchResult(ctx, nil, maps, "autotask_search_billing_item_approval_levels", maxResults)
 	}
 }

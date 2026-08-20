@@ -15,8 +15,7 @@ type SearchContactsInput struct {
 	SearchTerm string `json:"searchTerm,omitempty" jsonschema:"Search term for contact name or email"`
 	CompanyID  int64  `json:"companyID,omitempty" jsonschema:"Filter by company ID"`
 	IsActive   *int   `json:"isActive,omitempty" jsonschema:"Filter by active status (1=active, 0=inactive)"`
-	Page       int    `json:"page,omitempty" jsonschema:"Page number (default 1)"`
-	PageSize   int    `json:"pageSize,omitempty" jsonschema:"Results per page (default 25, max 200)"`
+	MaxResults int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 200)"`
 }
 
 // CreateContactInput defines the input parameters for creating a new contact.
@@ -33,7 +32,7 @@ type CreateContactInput struct {
 func RegisterContactTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_search_contacts",
-		Description: "Find contacts by name or email substring, company ID, or active status, returning a compact paginated summary (25 per page, max 200). A searchTerm matches across first name, last name, and email address. Use this to locate a contact and its ID; to add a new one instead use autotask_create_contact. Read-only.",
+		Description: "Find contacts by name or email substring, company ID, or active status, returning a compact summary of matching records (up to maxResults, default 25, max 200). A searchTerm matches across first name, last name, and email address. Use this to locate a contact and its ID; to add a new one instead use autotask_create_contact. Read-only.",
 		Annotations: readOnlyTool("Search contacts"),
 	}, searchContactsHandler(client, mapper))
 
@@ -47,10 +46,9 @@ func RegisterContactTools(s *mcp.Server, client *autotask.Client, mapper *servic
 // searchContactsHandler returns a handler that searches contacts using the provided filters.
 func searchContactsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchContactsInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchContactsInput) (*mcp.CallToolResult, any, error) {
-		page := defaultPage(in.Page)
-		pageSize := defaultPageSize(in.PageSize, 25, 200)
+		maxResults := defaultMaxResults(in.MaxResults, 25, 200)
 
-		q := autotask.NewQuery().Limit(pageSize)
+		q := autotask.NewQuery().Limit(maxResults)
 
 		if in.SearchTerm != "" {
 			q.Or(
@@ -80,7 +78,7 @@ func searchContactsHandler(client *autotask.Client, mapper *services.MappingCach
 			return errorResult("failed to convert contacts: %v", err)
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_contacts", page, pageSize)
+		return searchResult(ctx, mapper, maps, "autotask_search_contacts", maxResults)
 	}
 }
 

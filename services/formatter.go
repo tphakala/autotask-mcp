@@ -31,48 +31,81 @@ var CompactSearchTools = map[string]bool{
 	"autotask_search_time_entries":               true,
 }
 
-// FormatOptions controls paging metadata for compact responses.
+// FormatOptions controls result limits for compact responses.
 type FormatOptions struct {
-	Page     int
-	PageSize int
+	MaxResults int
 }
 
-// CompactSummary holds pagination metadata returned with a compact response.
+// CompactSummary holds bounded search metadata returned with a compact response.
 type CompactSummary struct {
-	Returned int    `json:"returned"`
-	HasMore  bool   `json:"hasMore"`
-	Page     int    `json:"page"`
-	PageSize int    `json:"pageSize"`
-	Hint     string `json:"hint,omitempty"`
+	Returned   int    `json:"returned"`
+	HasMore    bool   `json:"hasMore"`
+	MaxResults int    `json:"maxResults,omitempty"`
+	Hint       string `json:"hint,omitempty"`
 }
 
 // CompactResponse is the complete compact-formatted search result.
 type CompactResponse struct {
-	Summary CompactSummary           `json:"summary"`
-	Items   []map[string]any         `json:"items"`
+	Summary CompactSummary   `json:"summary"`
+	Items   []map[string]any `json:"items"`
+}
+
+// FrameUntrustedContent wraps external user-supplied text with untrusted data boundary markers,
+// escaping any inner boundary tags to prevent breakout.
+func FrameUntrustedContent(content string) string {
+	if content == "" {
+		return content
+	}
+	if strings.HasPrefix(content, "<untrusted_content>\n") && strings.HasSuffix(content, "\n</untrusted_content>") {
+		inner := content[len("<untrusted_content>\n") : len(content)-len("\n</untrusted_content>")]
+		content = inner
+	}
+	sanitized := strings.ReplaceAll(content, "</untrusted_content>", "&lt;/untrusted_content&gt;")
+	sanitized = strings.ReplaceAll(sanitized, "<untrusted_content>", "&lt;untrusted_content&gt;")
+	return fmt.Sprintf("<untrusted_content>\n%s\n</untrusted_content>", sanitized)
+}
+
+// FrameUntrustedMapFields inspects known external user-supplied fields on an entity map
+// and wraps their string values in untrusted content boundary markers.
+func FrameUntrustedMapFields(m map[string]any) {
+	if m == nil {
+		return
+	}
+	untrustedFields := []string{
+		"description", "title", "note", "summaryNotes", "details",
+		"problemDescription", "resolution", "internalNotes", "cause", "name",
+		"projectName", "companyName", "referenceTitle", "referenceName",
+		"fileName", "serviceName", "serviceBundleName",
+	}
+	for _, field := range untrustedFields {
+		if val, ok := m[field].(string); ok && val != "" {
+			m[field] = FrameUntrustedContent(val)
+		}
+	}
 }
 
 // FormatCompactResponse formats a slice of raw items into a compact response,
-// picking only summary fields for the given entity type.
+// picking only summary fields for the given entity type and framing untrusted text.
 func FormatCompactResponse(items []map[string]any, entityType string, opts FormatOptions) CompactResponse {
 	compact := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		compact = append(compact, pickSummaryFields(item, entityType))
+		summaryItem := pickSummaryFields(item, entityType)
+		FrameUntrustedMapFields(summaryItem)
+		compact = append(compact, summaryItem)
 	}
 
-	hasMore := len(items) >= opts.PageSize && opts.PageSize > 0
+	hasMore := len(items) >= opts.MaxResults && opts.MaxResults > 0
 	hint := ""
 	if hasMore {
-		hint = fmt.Sprintf("More results available. Use page=%d to retrieve the next page.", opts.Page+1)
+		hint = "Maximum result limit reached. Use narrower search filters to find specific records."
 	}
 
 	return CompactResponse{
 		Summary: CompactSummary{
-			Returned: len(compact),
-			HasMore:  hasMore,
-			Page:     opts.Page,
-			PageSize: opts.PageSize,
-			Hint:     hint,
+			Returned:   len(compact),
+			HasMore:    hasMore,
+			MaxResults: opts.MaxResults,
+			Hint:       hint,
 		},
 		Items: compact,
 	}

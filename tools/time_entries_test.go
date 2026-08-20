@@ -173,8 +173,7 @@ func TestSearchTimeEntriesHandler_WithFilters(t *testing.T) {
 		ResourceID:      5001,
 		TicketID:        3001,
 		DateWorkedAfter: "2024-01-01T00:00:00Z",
-		Page:            1,
-		PageSize:        10,
+		MaxResults:      10,
 	}
 
 	result, _, err := handler(ctx, nil, in)
