@@ -25,14 +25,14 @@ func connectMCP(t *testing.T, client *autotask.Client) *mcp.ClientSession {
 	if err != nil {
 		t.Fatalf("server Connect: %v", err)
 	}
-	t.Cleanup(func() { ss.Close() })
+	t.Cleanup(func() { _ = ss.Close() })
 
 	c := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
 	cs, err := c.Connect(ctx, ct, nil)
 	if err != nil {
 		t.Fatalf("client Connect: %v", err)
 	}
-	t.Cleanup(func() { cs.Close() })
+	t.Cleanup(func() { _ = cs.Close() })
 
 	return cs
 }

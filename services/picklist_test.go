@@ -145,7 +145,7 @@ func TestPicklistCacheTypes(t *testing.T) {
 	}
 
 	// Verify the type is correct
-	var _ []metadata.FieldInfo = fields
+	_ = []metadata.FieldInfo(fields)
 	if len(fields) == 0 {
 		t.Fatal("expected non-empty fields slice")
 	}
