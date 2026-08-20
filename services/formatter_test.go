@@ -168,6 +168,55 @@ func TestFrameUntrustedMapFields(t *testing.T) {
 	}
 }
 
+// TestFrameUntrustedMapFields_IdentityAndEnhanced pins that the externally-supplied
+// identity fields and the resolved names in the _enhanced sub-map (the get-detail
+// path) are framed, while non-string values are left untouched.
+func TestFrameUntrustedMapFields_IdentityAndEnhanced(t *testing.T) {
+	m := map[string]any{
+		"firstName":    "Alice",
+		"lastName":     "Example",
+		"emailAddress": "alice@example.com",
+		"itemName":     "Widget",
+		"contractName": "Support Plan",
+		"companyID":    int64(7), // non-string: must be left alone, no panic
+		"_enhanced": map[string]any{
+			"companyName":             "Acme Corp",
+			"assignedResourceName":    "John Doe",
+			"projectLeadResourceName": "Jane Smith",
+		},
+	}
+
+	FrameUntrustedMapFields(m)
+
+	for _, field := range []string{"firstName", "lastName", "emailAddress", "itemName", "contractName"} {
+		if v, _ := m[field].(string); !strings.Contains(v, "<untrusted_content>") {
+			t.Errorf("expected %s to be framed, got %q", field, v)
+		}
+	}
+	if _, ok := m["companyID"].(int64); !ok {
+		t.Errorf("expected companyID left as int64, got %T (%v)", m["companyID"], m["companyID"])
+	}
+
+	enhanced, ok := m["_enhanced"].(map[string]any)
+	if !ok {
+		t.Fatal("expected _enhanced sub-map to survive")
+	}
+	wantNames := map[string]string{
+		"companyName":             "Acme Corp",
+		"assignedResourceName":    "John Doe",
+		"projectLeadResourceName": "Jane Smith",
+	}
+	for k, want := range wantNames {
+		v, _ := enhanced[k].(string)
+		if !strings.Contains(v, "<untrusted_content>") {
+			t.Errorf("expected _enhanced.%s to be framed, got %q", k, v)
+		}
+		if !strings.Contains(v, want) {
+			t.Errorf("expected _enhanced.%s to retain %q, got %q", k, want, v)
+		}
+	}
+}
+
 func TestDetectEntityType(t *testing.T) {
 	tests := []struct {
 		toolName string
@@ -286,8 +335,11 @@ func TestFrameUntrustedContent_EscapesInnerAndVariantTags(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			got := FrameUntrustedContent(c.input)
 			body := strings.TrimSuffix(strings.TrimPrefix(got, "<untrusted_content>\n"), "\n</untrusted_content>")
-			if untrustedTagPattern.MatchString(body) {
-				t.Errorf("body still contains an unescaped boundary tag: %q", body)
+			// After escaping, no raw '<' from a boundary tag may remain (the escaped
+			// &lt; form has none). This is a real, non-circular check: a too-narrow
+			// escaping pattern that misses a whitespace/case variant leaves a raw '<'.
+			if strings.Contains(body, "<") {
+				t.Errorf("body still contains a raw '<' (unescaped boundary tag): %q", body)
 			}
 			if !strings.Contains(body, "&lt;") {
 				t.Errorf("expected an escaped tag in body, got %q", body)

@@ -96,10 +96,10 @@ func TestCreateContactHandler_Success(t *testing.T) {
 	}
 
 	m := parseStructuredContent[map[string]any](t, result)
-	// firstName is now framed as untrusted content (contacts are externally supplied),
-	// so assert the resolved name survives rather than an exact-string match.
-	if fn, ok := m["firstName"].(string); !ok || !strings.Contains(fn, "Alice") {
-		t.Errorf("expected firstName containing 'Alice', got %v", m["firstName"])
+	// firstName is externally supplied, so it must be framed as untrusted content:
+	// assert both that it is framed AND that the resolved name survives.
+	if fn, ok := m["firstName"].(string); !ok || !strings.Contains(fn, "Alice") || !strings.Contains(fn, "<untrusted_content>") {
+		t.Errorf("expected framed firstName containing 'Alice', got %v", m["firstName"])
 	}
 }
 

@@ -90,6 +90,17 @@ func FrameUntrustedMapFields(m map[string]any) {
 			m[field] = FrameUntrustedContent(val)
 		}
 	}
+	// The _enhanced sub-map (emitted by get-detail handlers before flattening)
+	// holds resolved human-readable names, all customer/staff-controlled text.
+	// Frame every string value so the get path matches the search path, which
+	// inlines and frames these same names via pickSummaryFields.
+	if enhanced, ok := m["_enhanced"].(map[string]any); ok {
+		for k, v := range enhanced {
+			if s, ok := v.(string); ok && s != "" {
+				enhanced[k] = FrameUntrustedContent(s)
+			}
+		}
+	}
 }
 
 // FormatCompactResponse formats a slice of raw items into a compact response,

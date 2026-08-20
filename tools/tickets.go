@@ -150,6 +150,10 @@ func getTicketDetailsHandler(client *autotask.Client, mapper *services.MappingCa
 
 		if mapper != nil {
 			mapper.EnhanceItems(ctx, []map[string]any{m})
+			// EnhanceItems attaches the _enhanced sub-map AFTER entityToMap framed
+			// the top-level fields, so re-frame here to wrap the resolved company/
+			// resource names (customer-controlled) the search path already frames.
+			services.FrameUntrustedMapFields(m)
 		}
 
 		return nil, m, nil
