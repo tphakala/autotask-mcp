@@ -111,6 +111,20 @@ func TestSearchTicketNotesHandler_TruncationAndFraming(t *testing.T) {
 		t.Errorf("expected description to be framed with untrusted_content tags, got: %v", desc)
 	}
 
+	// Regression: ticket notes must be framed exactly ONCE, AFTER truncation.
+	// The previous frame -> truncate -> frame sequence severed the closing marker,
+	// left a stray escaped &lt;untrusted_content&gt; artifact, and truncated the body
+	// ~20 chars early (counting the framing prefix as content).
+	if !strings.HasPrefix(desc, "<untrusted_content>\n") || !strings.HasSuffix(desc, "\n</untrusted_content>") {
+		t.Errorf("expected description framed exactly once with intact markers, got: %q", desc)
+	}
+	if strings.Contains(desc, "&lt;untrusted_content&gt;") || strings.Contains(desc, "&lt;/untrusted_content&gt;") {
+		t.Errorf("description contains a stray escaped boundary artifact (double-framing): %q", desc)
+	}
+	if got := strings.Count(desc, "A"); got != maxNoteSummaryLength {
+		t.Errorf("expected exactly %d body chars before truncation (raw truncation), got %d", maxNoteSummaryLength, got)
+	}
+
 	title, _ := n["title"].(string)
 	if !strings.Contains(title, "<untrusted_content>") {
 		t.Errorf("expected title to be framed with untrusted_content tags, got: %v", title)
@@ -329,5 +343,3 @@ func TestCreateCompanyNoteHandler_Success(t *testing.T) {
 		t.Errorf("expected name to contain 'Company note title', got %v", m["name"])
 	}
 }
-
-

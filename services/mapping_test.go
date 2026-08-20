@@ -71,6 +71,60 @@ func TestGetCompanyName_ErrorFallback(t *testing.T) {
 	}
 }
 
+// TestGetCompanyName_TransientErrorNotCached pins that a cancelled/timed-out
+// lookup is NOT negative-cached: since the cache is shared process-wide, poisoning
+// it with a transient failure would mask a valid ID for the full TTL.
+func TestGetCompanyName_TransientErrorNotCached(t *testing.T) {
+	body := map[string]any{
+		"item": map[string]any{
+			"id":          float64(42),
+			"companyName": "Acme Corp",
+		},
+	}
+	client := autotasktest.NewMockClient(t,
+		autotasktest.WithFixture("GET", "/v1.0/Companies/42", 200, body),
+	)
+	cache := NewMappingCache(client)
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := cache.GetCompanyName(cancelled, 42); got != "Unknown (42)" {
+		t.Fatalf("cancelled lookup: expected 'Unknown (42)', got %q", got)
+	}
+
+	// A subsequent healthy lookup must resolve the real name, proving the
+	// transient failure did not poison the cache.
+	if got := cache.GetCompanyName(context.Background(), 42); got != "Acme Corp" {
+		t.Errorf("after transient failure: expected 'Acme Corp' (cache not poisoned), got %q", got)
+	}
+}
+
+// TestGetResourceName_TransientErrorNotCached mirrors the company test for the
+// identical guard in GetResourceName, so the two sibling guards cannot diverge.
+func TestGetResourceName_TransientErrorNotCached(t *testing.T) {
+	body := map[string]any{
+		"item": map[string]any{
+			"id":        float64(42),
+			"firstName": "Jane",
+			"lastName":  "Smith",
+		},
+	}
+	client := autotasktest.NewMockClient(t,
+		autotasktest.WithFixture("GET", "/v1.0/Resources/42", 200, body),
+	)
+	cache := NewMappingCache(client)
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := cache.GetResourceName(cancelled, 42); got != "Unknown (42)" {
+		t.Fatalf("cancelled lookup: expected 'Unknown (42)', got %q", got)
+	}
+
+	if got := cache.GetResourceName(context.Background(), 42); got != "Jane Smith" {
+		t.Errorf("after transient failure: expected 'Jane Smith' (cache not poisoned), got %q", got)
+	}
+}
+
 func TestGetResourceName_ZeroID(t *testing.T) {
 	client := autotasktest.NewMockClient(t)
 	cache := NewMappingCache(client)

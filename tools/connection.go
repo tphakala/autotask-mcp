@@ -31,7 +31,7 @@ func testConnectionHandler(client *autotask.Client) func(ctx context.Context, re
 			CanCreate: info.CanCreate,
 			CanUpdate: info.CanUpdate,
 			CanQuery:  info.CanQuery,
-			Message: "Connection successful",
+			Message:   "Connection successful",
 		}, nil
 	}
 }

@@ -332,10 +332,14 @@ func getConfigField(fc FileConfig, key string) (string, error) {
 		"auth_mode":        fc.AuthMode,
 		"authmode":         fc.AuthMode,
 	}
+	// Register the pointer-backed keys unconditionally so an UNSET value returns
+	// empty (like every string field) rather than a false "unknown config key".
+	fields["http_port"], fields["httpport"] = "", ""
 	if fc.HTTPPort != nil {
 		fields["http_port"] = strconv.Itoa(*fc.HTTPPort)
 		fields["httpport"] = strconv.Itoa(*fc.HTTPPort)
 	}
+	fields["lazy_loading"], fields["lazyloading"] = "", ""
 	if fc.LazyLoading != nil {
 		fields["lazy_loading"] = strconv.FormatBool(*fc.LazyLoading)
 		fields["lazyloading"] = strconv.FormatBool(*fc.LazyLoading)

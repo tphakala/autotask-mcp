@@ -342,4 +342,3 @@ func TestSearchInvoicesHandler_NoResults(t *testing.T) {
 		t.Errorf("expected 0 returned invoices, got %d", resp.Summary.Returned)
 	}
 }
-

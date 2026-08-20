@@ -156,4 +156,3 @@ func TestSearchCompaniesHandler_WithFilters(t *testing.T) {
 		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
 	}
 }
-

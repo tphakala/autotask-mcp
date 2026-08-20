@@ -201,4 +201,3 @@ func TestGetFieldInfoHandler_NotFoundField(t *testing.T) {
 		t.Error("expected IsError=true for non-existent field")
 	}
 }
-

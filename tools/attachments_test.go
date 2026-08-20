@@ -164,4 +164,3 @@ func TestGetTicketAttachmentHandler_IncludeData(t *testing.T) {
 		t.Errorf("expected 'data' field to be present when includeData=true")
 	}
 }
-

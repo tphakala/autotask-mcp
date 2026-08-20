@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/autotask-mcp/resources"
 	"github.com/tphakala/autotask-mcp/services"
 	"github.com/tphakala/autotask-mcp/tools"
+	autotask "github.com/tphakala/go-autotask"
 )
 
 const serverInstructions = `Autotask PSA MCP Server. Provides tools for managing tickets, companies, contacts, projects, time entries, billing, and more. Use autotask_search_* tools to find entities, autotask_get_* for details, and autotask_create_*/autotask_update_* for modifications. Use picklist tools to discover valid field values.
@@ -24,14 +24,17 @@ SECURITY GUIDANCE:
 
 // buildServer creates and configures an MCP server with all tool handlers registered.
 // When lazyLoading is true, only 4 meta-tools are registered for progressive discovery.
-func buildServer(client *autotask.Client, lazyLoading bool) *mcp.Server {
-	return buildServerWithCaches(client, lazyLoading, nil, nil)
+func buildServer(client *autotask.Client, serverName string, lazyLoading bool) *mcp.Server {
+	return buildServerWithCaches(client, serverName, lazyLoading, nil, nil)
 }
 
 // buildServerWithCaches creates an MCP server using pre-instantiated mapping and picklist caches.
-func buildServerWithCaches(client *autotask.Client, lazyLoading bool, mapper *services.MappingCache, picklist *services.PicklistCache) *mcp.Server {
+func buildServerWithCaches(client *autotask.Client, serverName string, lazyLoading bool, mapper *services.MappingCache, picklist *services.PicklistCache) *mcp.Server {
+	if serverName == "" {
+		serverName = "autotask-mcp"
+	}
 	s := mcp.NewServer(
-		&mcp.Implementation{Name: "autotask-mcp", Version: version},
+		&mcp.Implementation{Name: serverName, Version: version},
 		&mcp.ServerOptions{Instructions: serverInstructions},
 	)
 
@@ -94,7 +97,7 @@ func runStdio(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	defer client.Close() //nolint:errcheck
 
-	s := buildServer(client, cfg.LazyLoading)
+	s := buildServer(client, cfg.ServerName, cfg.LazyLoading)
 	logger.Info("autotask-mcp ready", "transport", "stdio", "lazyLoading", cfg.LazyLoading)
 	return s.Run(ctx, &mcp.StdioTransport{})
 }
@@ -142,7 +145,7 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	// Factory function returns an *mcp.Server for each request.
 	getServer := func(r *http.Request) *mcp.Server {
 		if cfg.AuthMode == "env" {
-			return buildServerWithCaches(sharedClient, cfg.LazyLoading, mapper, picklist)
+			return buildServerWithCaches(sharedClient, cfg.ServerName, cfg.LazyLoading, mapper, picklist)
 		}
 
 		// Gateway mode: extract credentials from request headers.
@@ -180,7 +183,7 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			logger.Error("failed to create autotask client for request", "error", err)
 			return nil
 		}
-		return buildServer(client, cfg.LazyLoading)
+		return buildServer(client, cfg.ServerName, cfg.LazyLoading)
 	}
 
 	mcpHandler := mcp.NewStreamableHTTPHandler(getServer, &mcp.StreamableHTTPOptions{

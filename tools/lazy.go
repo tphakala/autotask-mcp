@@ -260,15 +260,15 @@ func buildToolDispatcher(client *autotask.Client, mapper *services.MappingCache,
 		"autotask_search_ticket_attachments": makeRunner(searchTicketAttachmentsHandler(client)),
 
 		// Billing
-		"autotask_get_billing_item":                   makeRunner(getBillingItemHandler(client)),
-		"autotask_search_billing_items":               makeRunner(searchBillingItemsHandler(client, mapper)),
+		"autotask_get_billing_item":                    makeRunner(getBillingItemHandler(client)),
+		"autotask_search_billing_items":                makeRunner(searchBillingItemsHandler(client, mapper)),
 		"autotask_search_billing_item_approval_levels": makeRunner(searchBillingItemApprovalLevelsHandler(client)),
 
 		// Expenses
-		"autotask_get_expense_report":    makeRunner(getExpenseReportHandler(client)),
+		"autotask_get_expense_report":     makeRunner(getExpenseReportHandler(client)),
 		"autotask_search_expense_reports": makeRunner(searchExpenseReportsHandler(client)),
-		"autotask_create_expense_report": makeRunner(createExpenseReportHandler(client)),
-		"autotask_create_expense_item":   makeRunner(createExpenseItemHandler(client)),
+		"autotask_create_expense_report":  makeRunner(createExpenseReportHandler(client)),
+		"autotask_create_expense_item":    makeRunner(createExpenseItemHandler(client)),
 
 		// Sales
 		"autotask_get_product":            makeRunner(getProductHandler(client)),
@@ -279,19 +279,19 @@ func buildToolDispatcher(client *autotask.Client, mapper *services.MappingCache,
 		"autotask_search_service_bundles": makeRunner(searchServiceBundlesHandler(client)),
 
 		// Financial
-		"autotask_get_quote":             makeRunner(getQuoteHandler(client)),
-		"autotask_search_quotes":         makeRunner(searchQuotesHandler(client)),
-		"autotask_create_quote":          makeRunner(createQuoteHandler(client)),
-		"autotask_get_quote_item":        makeRunner(getQuoteItemHandler(client)),
-		"autotask_search_quote_items":    makeRunner(searchQuoteItemsHandler(client)),
-		"autotask_create_quote_item":     makeRunner(createQuoteItemHandler(client)),
-		"autotask_update_quote_item":     makeRunner(updateQuoteItemHandler(client)),
-		"autotask_delete_quote_item":     makeRunner(deleteQuoteItemHandler(client)),
-		"autotask_get_opportunity":       makeRunner(getOpportunityHandler(client)),
-		"autotask_search_opportunities":  makeRunner(searchOpportunitiesHandler(client)),
-		"autotask_create_opportunity":    makeRunner(createOpportunityHandler(client)),
-		"autotask_search_contracts":      makeRunner(searchContractsHandler(client, mapper)),
-		"autotask_search_invoices":       makeRunner(searchInvoicesHandler(client)),
+		"autotask_get_quote":            makeRunner(getQuoteHandler(client)),
+		"autotask_search_quotes":        makeRunner(searchQuotesHandler(client)),
+		"autotask_create_quote":         makeRunner(createQuoteHandler(client)),
+		"autotask_get_quote_item":       makeRunner(getQuoteItemHandler(client)),
+		"autotask_search_quote_items":   makeRunner(searchQuoteItemsHandler(client)),
+		"autotask_create_quote_item":    makeRunner(createQuoteItemHandler(client)),
+		"autotask_update_quote_item":    makeRunner(updateQuoteItemHandler(client)),
+		"autotask_delete_quote_item":    makeRunner(deleteQuoteItemHandler(client)),
+		"autotask_get_opportunity":      makeRunner(getOpportunityHandler(client)),
+		"autotask_search_opportunities": makeRunner(searchOpportunitiesHandler(client)),
+		"autotask_create_opportunity":   makeRunner(createOpportunityHandler(client)),
+		"autotask_search_contracts":     makeRunner(searchContractsHandler(client, mapper)),
+		"autotask_search_invoices":      makeRunner(searchInvoicesHandler(client)),
 	}
 }
 
@@ -328,7 +328,10 @@ func RegisterLazyTools(s *mcp.Server, client *autotask.Client, mapper *services.
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "autotask_execute_tool",
 		Description: "Execute a named Autotask tool with arguments in lazy-loading mode. Dispatches the tool call to the internal handler and returns the execution result. Use autotask_router or autotask_list_category_tools to discover tool names and argument schemas. Requires toolName. Open world.",
-		Annotations: &mcp.ToolAnnotations{Title: "Execute tool", OpenWorldHint: new(true)},
+		// This proxy can dispatch create/update/delete tools, so it must advertise
+		// itself as destructive: a host that gates confirmation on DestructiveHint
+		// would otherwise grant blanket mutation access after one read-only call.
+		Annotations: &mcp.ToolAnnotations{Title: "Execute tool", DestructiveHint: new(true), OpenWorldHint: new(true)},
 	}, executeToolHandler(dispatcher))
 
 	mcp.AddTool(s, &mcp.Tool{

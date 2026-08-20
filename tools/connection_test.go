@@ -56,4 +56,3 @@ func TestTestConnectionHandler_Wire(t *testing.T) {
 		t.Errorf("expected Entity=Tickets, got %q", out.Entity)
 	}
 }
-
