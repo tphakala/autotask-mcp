@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
 )
@@ -26,8 +27,8 @@ func RegisterResourceTools(s *mcp.Server, client *autotask.Client) {
 }
 
 // searchResourcesHandler returns a handler that searches resources using the provided filters.
-func searchResourcesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchResourcesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchResourcesInput) (*mcp.CallToolResult, any, error) {
+func searchResourcesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchResourcesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchResourcesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 
 		q := autotask.NewQuery().Limit(maxResults)
@@ -48,16 +49,16 @@ func searchResourcesHandler(client *autotask.Client) func(ctx context.Context, r
 
 		resources, err := autotask.List[entities.Resource](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search resources: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(resources) == 0 {
-			return textResult("No resources found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(resources)
 		if err != nil {
-			return errorResult("failed to convert resources: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, nil, maps, "autotask_search_resources", maxResults)

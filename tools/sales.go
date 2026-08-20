@@ -2,9 +2,9 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
 )
@@ -85,30 +85,25 @@ func RegisterSalesTools(s *mcp.Server, client *autotask.Client) {
 }
 
 // getProductHandler returns a handler that retrieves a single product.
-func getProductHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetProductInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetProductInput) (*mcp.CallToolResult, any, error) {
+func getProductHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetProductInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetProductInput) (*mcp.CallToolResult, map[string]any, error) {
 		product, err := autotask.Get[entities.Product](ctx, client, in.ProductID)
 		if err != nil {
-			return errorResult("failed to get product %d: %v", in.ProductID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(product)
 		if err != nil {
-			return errorResult("failed to convert product: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal product: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchProductsHandler returns a handler that searches products.
-func searchProductsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProductsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProductsInput) (*mcp.CallToolResult, any, error) {
+func searchProductsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProductsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProductsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -121,52 +116,42 @@ func searchProductsHandler(client *autotask.Client) func(ctx context.Context, re
 
 		products, err := autotask.List[entities.Product](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search products: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(products) == 0 {
-			return textResult("No products found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(products)
 		if err != nil {
-			return errorResult("failed to convert products: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
-		data, err := json.MarshalIndent(maps, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal products: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return searchResult(ctx, nil, maps, "autotask_search_products", maxResults)
 	}
 }
 
 // getServiceHandler returns a handler that retrieves a single service.
-func getServiceHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetServiceInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetServiceInput) (*mcp.CallToolResult, any, error) {
+func getServiceHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetServiceInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetServiceInput) (*mcp.CallToolResult, map[string]any, error) {
 		service, err := autotask.Get[entities.Service](ctx, client, in.ServiceID)
 		if err != nil {
-			return errorResult("failed to get service %d: %v", in.ServiceID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(service)
 		if err != nil {
-			return errorResult("failed to convert service: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal service: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchServicesHandler returns a handler that searches services.
-func searchServicesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchServicesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchServicesInput) (*mcp.CallToolResult, any, error) {
+func searchServicesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchServicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchServicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -177,54 +162,44 @@ func searchServicesHandler(client *autotask.Client) func(ctx context.Context, re
 			q.Where("isActive", autotask.OpEq, *in.IsActive)
 		}
 
-		services, err := autotask.List[entities.Service](ctx, client, q)
+		svcs, err := autotask.List[entities.Service](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search services: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
-		if len(services) == 0 {
-			return textResult("No services found")
+		if len(svcs) == 0 {
+			return emptySearchResult()
 		}
 
-		maps, err := entitiesToMaps(services)
+		maps, err := entitiesToMaps(svcs)
 		if err != nil {
-			return errorResult("failed to convert services: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
-		data, err := json.MarshalIndent(maps, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal services: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return searchResult(ctx, nil, maps, "autotask_search_services", maxResults)
 	}
 }
 
 // getServiceBundleHandler returns a handler that retrieves a single service bundle.
-func getServiceBundleHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetServiceBundleInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetServiceBundleInput) (*mcp.CallToolResult, any, error) {
+func getServiceBundleHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetServiceBundleInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetServiceBundleInput) (*mcp.CallToolResult, map[string]any, error) {
 		bundle, err := autotask.Get[entities.ServiceBundle](ctx, client, in.ServiceBundleID)
 		if err != nil {
-			return errorResult("failed to get service bundle %d: %v", in.ServiceBundleID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(bundle)
 		if err != nil {
-			return errorResult("failed to convert service bundle: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal service bundle: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchServiceBundlesHandler returns a handler that searches service bundles.
-func searchServiceBundlesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchServiceBundlesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchServiceBundlesInput) (*mcp.CallToolResult, any, error) {
+func searchServiceBundlesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchServiceBundlesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchServiceBundlesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -237,23 +212,18 @@ func searchServiceBundlesHandler(client *autotask.Client) func(ctx context.Conte
 
 		bundles, err := autotask.List[entities.ServiceBundle](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search service bundles: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(bundles) == 0 {
-			return textResult("No service bundles found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(bundles)
 		if err != nil {
-			return errorResult("failed to convert service bundles: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
-		data, err := json.MarshalIndent(maps, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal service bundles: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return searchResult(ctx, nil, maps, "autotask_search_service_bundles", maxResults)
 	}
 }

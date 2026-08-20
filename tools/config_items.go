@@ -28,8 +28,8 @@ func RegisterConfigItemTools(s *mcp.Server, client *autotask.Client, mapper *ser
 }
 
 // searchConfigurationItemsHandler returns a handler that searches configuration items.
-func searchConfigurationItemsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchConfigurationItemsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchConfigurationItemsInput) (*mcp.CallToolResult, any, error) {
+func searchConfigurationItemsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchConfigurationItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchConfigurationItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -48,16 +48,16 @@ func searchConfigurationItemsHandler(client *autotask.Client, mapper *services.M
 
 		items, err := autotask.List[entities.ConfigurationItem](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search configuration items: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(items) == 0 {
-			return textResult("No configuration items found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(items)
 		if err != nil {
-			return errorResult("failed to convert configuration items: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, mapper, maps, "autotask_search_configuration_items", maxResults)

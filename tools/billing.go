@@ -2,7 +2,7 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -59,33 +59,28 @@ func RegisterBillingTools(s *mcp.Server, client *autotask.Client, mapper *servic
 }
 
 // getBillingItemHandler returns a handler that retrieves a single billing item.
-func getBillingItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetBillingItemInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetBillingItemInput) (*mcp.CallToolResult, any, error) {
+func getBillingItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetBillingItemInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetBillingItemInput) (*mcp.CallToolResult, map[string]any, error) {
 		if in.BillingItemID == 0 {
-			return errorResult("billingItemId is required")
+			return nil, nil, fmt.Errorf("billingItemId is required")
 		}
 		item, err := autotask.Get[entities.BillingItem](ctx, client, in.BillingItemID)
 		if err != nil {
-			return errorResult("failed to get billing item %d: %v", in.BillingItemID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(item)
 		if err != nil {
-			return errorResult("failed to convert billing item: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal billing item: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // searchBillingItemsHandler returns a handler that searches billing items.
-func searchBillingItemsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemsInput) (*mcp.CallToolResult, any, error) {
+func searchBillingItemsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -113,16 +108,16 @@ func searchBillingItemsHandler(client *autotask.Client, mapper *services.Mapping
 
 		items, err := autotask.List[entities.BillingItem](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search billing items: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(items) == 0 {
-			return textResult("No billing items found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(items)
 		if err != nil {
-			return errorResult("failed to convert billing items: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, mapper, maps, "autotask_search_billing_items", maxResults)
@@ -130,8 +125,8 @@ func searchBillingItemsHandler(client *autotask.Client, mapper *services.Mapping
 }
 
 // searchBillingItemApprovalLevelsHandler returns a handler that searches billing item approval levels.
-func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, any, error) {
+func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 		q := autotask.NewQuery().Limit(maxResults)
 
@@ -153,16 +148,16 @@ func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx co
 
 		levels, err := autotask.List[entities.BillingItemApprovalLevel](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search billing item approval levels: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(levels) == 0 {
-			return textResult("No billing item approval levels found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(levels)
 		if err != nil {
-			return errorResult("failed to convert billing item approval levels: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, nil, maps, "autotask_search_billing_item_approval_levels", maxResults)

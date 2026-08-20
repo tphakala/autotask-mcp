@@ -2,12 +2,11 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/tphakala/go-autotask/autotasktest"
 	"github.com/tphakala/autotask-mcp/services"
+	"github.com/tphakala/go-autotask/autotasktest"
 )
 
 // TestRegisterConfigItemTools_NoPanic verifies registration does not panic.
@@ -18,81 +17,80 @@ func TestRegisterConfigItemTools_NoPanic(t *testing.T) {
 	RegisterConfigItemTools(s, client, mapper)
 }
 
-// TestSearchConfigurationItemsHandler_NoResults tests the empty-result case.
+// TestSearchConfigurationItemsHandler_NoResults tests the empty-result case over wire.
 func TestSearchConfigurationItemsHandler_NoResults(t *testing.T) {
-	_, client := autotasktest.NewServer(t)
-	mapper := services.NewMappingCache(client)
-	handler := searchConfigurationItemsHandler(client, mapper)
+	cs, _ := setupWireTest(t)
 	ctx := context.Background()
 
-	result, _, err := handler(ctx, nil, SearchConfigurationItemsInput{})
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "autotask_search_configuration_items",
+		Arguments: map[string]any{},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-}
-
-// TestSearchConfigurationItemsHandler_WithResults tests that seeded CIs are returned.
-func TestSearchConfigurationItemsHandler_WithResults(t *testing.T) {
-	ci := autotasktest.ConfigurationItemFixture()
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(ci))
-	mapper := services.NewMappingCache(client)
-	handler := searchConfigurationItemsHandler(client, mapper)
-	ctx := context.Background()
-
-	result, _, err := handler(ctx, nil, SearchConfigurationItemsInput{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatalf("unexpected wire error: %v", err)
 	}
 	if result.IsError {
 		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
 	}
-	if len(result.Content) == 0 {
-		t.Fatal("expected content in result")
-	}
 
-	text, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", result.Content[0])
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned != 0 {
+		t.Errorf("expected 0 returned items, got %d", resp.Summary.Returned)
 	}
-
-	var resp map[string]any
-	if err := json.Unmarshal([]byte(text.Text), &resp); err != nil {
-		t.Fatalf("result is not valid JSON: %v\ncontent: %s", err, text.Text)
-	}
-
-	items, ok := resp["items"].([]any)
-	if !ok {
-		t.Fatalf("expected 'items' array in response, got: %v", resp)
-	}
-	if len(items) == 0 {
-		t.Error("expected at least one configuration item in results")
+	if len(resp.Items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(resp.Items))
 	}
 }
 
-// TestSearchConfigurationItemsHandler_WithFilters verifies filters can be applied.
+// TestSearchConfigurationItemsHandler_WithResults tests that seeded CIs are returned over wire.
+func TestSearchConfigurationItemsHandler_WithResults(t *testing.T) {
+	ci := autotasktest.ConfigurationItemFixture()
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(ci))
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "autotask_search_configuration_items",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire error: %v", err)
+	}
+	if result.IsError {
+		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned < 1 {
+		t.Errorf("expected at least 1 item, got %d", resp.Summary.Returned)
+	}
+	if len(resp.Items) == 0 {
+		t.Fatal("expected items in response")
+	}
+	if resp.Items[0]["id"] == nil {
+		t.Error("expected CI to contain 'id' field")
+	}
+}
+
+// TestSearchConfigurationItemsHandler_WithFilters verifies filters can be applied over wire.
 func TestSearchConfigurationItemsHandler_WithFilters(t *testing.T) {
 	ci := autotasktest.ConfigurationItemFixture()
-	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(ci))
-	mapper := services.NewMappingCache(client)
-	handler := searchConfigurationItemsHandler(client, mapper)
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(ci))
 	ctx := context.Background()
 
 	active := true
-	result, _, err := handler(ctx, nil, SearchConfigurationItemsInput{
-		SearchTerm: "PROD",
-		CompanyID:  1001,
-		IsActive:   &active,
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_configuration_items",
+		Arguments: map[string]any{
+			"searchTerm": "PROD",
+			"companyID":  1001,
+			"isActive":   active,
+		},
 	})
 	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
+		t.Fatalf("unexpected wire error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if result.IsError {
+		t.Errorf("expected no error result, got IsError=true; content: %v", result.Content)
 	}
 }
+

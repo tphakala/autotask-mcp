@@ -2,11 +2,8 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestDefaultMaxResults_Default(t *testing.T) {
@@ -135,76 +132,45 @@ func TestEntitiesToMaps_Empty(t *testing.T) {
 	}
 }
 
-func TestTextResult(t *testing.T) {
-	result, out, err := textResult("Hello %s", "world")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if out != nil {
-		t.Errorf("expected nil out, got %v", out)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	if result.IsError {
-		t.Error("expected IsError=false")
-	}
-	if len(result.Content) != 1 {
-		t.Fatalf("expected 1 content item, got %d", len(result.Content))
-	}
-}
-
-func TestErrorResult(t *testing.T) {
-	result, out, err := errorResult("something went wrong: %d", 42)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if out != nil {
-		t.Errorf("expected nil out, got %v", out)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	if !result.IsError {
-		t.Error("expected IsError=true")
-	}
-	if len(result.Content) != 1 {
-		t.Fatalf("expected 1 content item, got %d", len(result.Content))
-	}
-}
-
 func TestSearchResult(t *testing.T) {
 	items := []map[string]any{
 		{"id": float64(101), "companyName": "Acme Corp", "phone": "555-1234"},
 		{"id": float64(102), "companyName": "Beta Inc", "phone": "555-5678"},
 	}
 
-	result, _, err := searchResult(context.Background(), nil, items, "autotask_search_companies", 25)
+	result, compact, err := searchResult(context.Background(), nil, items, "autotask_search_companies", 25)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result == nil || result.IsError {
-		t.Fatalf("expected valid non-error result: %v", result)
+	if result != nil {
+		t.Errorf("expected nil *CallToolResult so SDK generates it, got %v", result)
 	}
+	if compact.Summary.Returned != 2 {
+		t.Errorf("expected returned=2, got %d", compact.Summary.Returned)
+	}
+	if compact.Summary.HasMore {
+		t.Errorf("expected hasMore=false, got %v", compact.Summary.HasMore)
+	}
+	if len(compact.Items) != 2 {
+		t.Errorf("expected 2 items, got %d", len(compact.Items))
+	}
+}
 
-	textContent, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
+func TestEmptySearchResult(t *testing.T) {
+	result, compact, err := emptySearchResult()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-
-	var resp map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &resp); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
+	if result != nil {
+		t.Errorf("expected nil *CallToolResult, got %v", result)
 	}
-
-	summary, ok := resp["summary"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected summary object: %v", resp)
+	if compact.Summary.Returned != 0 {
+		t.Errorf("expected returned=0, got %d", compact.Summary.Returned)
 	}
-	if summary["returned"] != float64(2) {
-		t.Errorf("expected returned=2, got %v", summary["returned"])
+	if compact.Summary.HasMore {
+		t.Errorf("expected hasMore=false, got %v", compact.Summary.HasMore)
 	}
-	if summary["hasMore"] != false {
-		t.Errorf("expected hasMore=false, got %v", summary["hasMore"])
+	if len(compact.Items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(compact.Items))
 	}
 }

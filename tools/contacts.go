@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -44,8 +43,8 @@ func RegisterContactTools(s *mcp.Server, client *autotask.Client, mapper *servic
 }
 
 // searchContactsHandler returns a handler that searches contacts using the provided filters.
-func searchContactsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchContactsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchContactsInput) (*mcp.CallToolResult, any, error) {
+func searchContactsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchContactsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchContactsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 200)
 
 		q := autotask.NewQuery().Limit(maxResults)
@@ -66,16 +65,16 @@ func searchContactsHandler(client *autotask.Client, mapper *services.MappingCach
 
 		contacts, err := autotask.List[entities.Contact](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search contacts: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(contacts) == 0 {
-			return textResult("No contacts found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(contacts)
 		if err != nil {
-			return errorResult("failed to convert contacts: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, mapper, maps, "autotask_search_contacts", maxResults)
@@ -83,8 +82,8 @@ func searchContactsHandler(client *autotask.Client, mapper *services.MappingCach
 }
 
 // createContactHandler returns a handler that creates a new contact.
-func createContactHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateContactInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateContactInput) (*mcp.CallToolResult, any, error) {
+func createContactHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateContactInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateContactInput) (*mcp.CallToolResult, map[string]any, error) {
 		contact := &entities.Contact{
 			CompanyID: autotask.Set(in.CompanyID),
 			FirstName: autotask.Set(in.FirstName),
@@ -103,19 +102,14 @@ func createContactHandler(client *autotask.Client) func(ctx context.Context, req
 
 		created, err := autotask.Create[entities.Contact](ctx, client, contact)
 		if err != nil {
-			return errorResult("failed to create contact: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created contact: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created contact: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }

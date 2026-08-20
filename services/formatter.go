@@ -18,19 +18,6 @@ var SummaryFields = map[string][]string{
 	"timeEntries":               {"id", "resourceID", "ticketID", "projectID", "taskID", "dateWorked", "hoursWorked", "summaryNotes"},
 }
 
-// CompactSearchTools is the set of tool names that use compact formatting.
-var CompactSearchTools = map[string]bool{
-	"autotask_search_tickets":                    true,
-	"autotask_search_companies":                  true,
-	"autotask_search_contacts":                   true,
-	"autotask_search_projects":                   true,
-	"autotask_search_tasks":                      true,
-	"autotask_search_resources":                  true,
-	"autotask_search_billing_items":              true,
-	"autotask_search_billing_item_approval_levels": true,
-	"autotask_search_time_entries":               true,
-}
-
 // FormatOptions controls result limits for compact responses.
 type FormatOptions struct {
 	MaxResults int
@@ -38,16 +25,24 @@ type FormatOptions struct {
 
 // CompactSummary holds bounded search metadata returned with a compact response.
 type CompactSummary struct {
-	Returned   int    `json:"returned"`
-	HasMore    bool   `json:"hasMore"`
-	MaxResults int    `json:"maxResults,omitempty"`
-	Hint       string `json:"hint,omitempty"`
+	Returned   int    `json:"returned" jsonschema:"Number of items returned in this response"`
+	HasMore    bool   `json:"hasMore" jsonschema:"Whether more items match the search criteria"`
+	MaxResults int    `json:"maxResults,omitempty" jsonschema:"Effective max results limit used"`
+	Hint       string `json:"hint,omitempty" jsonschema:"Guidance when results are capped"`
 }
 
 // CompactResponse is the complete compact-formatted search result.
 type CompactResponse struct {
-	Summary CompactSummary   `json:"summary"`
-	Items   []map[string]any `json:"items"`
+	Summary CompactSummary   `json:"summary" jsonschema:"Search metadata summary"`
+	Items   []map[string]any `json:"items" jsonschema:"Matching entity records with framed untrusted fields"`
+}
+
+// untrustedFields lists the known external user-supplied fields that must be framed.
+var untrustedFields = []string{
+	"description", "title", "note", "summaryNotes", "details",
+	"problemDescription", "resolution", "internalNotes", "cause", "name",
+	"projectName", "companyName", "referenceTitle", "referenceName",
+	"fileName", "serviceName", "serviceBundleName",
 }
 
 // FrameUntrustedContent wraps external user-supplied text with untrusted data boundary markers,
@@ -70,12 +65,6 @@ func FrameUntrustedContent(content string) string {
 func FrameUntrustedMapFields(m map[string]any) {
 	if m == nil {
 		return
-	}
-	untrustedFields := []string{
-		"description", "title", "note", "summaryNotes", "details",
-		"problemDescription", "resolution", "internalNotes", "cause", "name",
-		"projectName", "companyName", "referenceTitle", "referenceName",
-		"fileName", "serviceName", "serviceBundleName",
 	}
 	for _, field := range untrustedFields {
 		if val, ok := m[field].(string); ok && val != "" {
@@ -172,6 +161,9 @@ func pickSummaryFields(item map[string]any, entityType string) map[string]any {
 		}
 		if v, ok := enhanced["resourceName"]; ok {
 			result["resourceName"] = v
+		}
+		if v, ok := enhanced["projectLeadResourceName"]; ok {
+			result["projectLead"] = v
 		}
 	}
 

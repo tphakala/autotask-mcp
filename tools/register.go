@@ -88,25 +88,52 @@ func entitiesToMaps[T any](entities []*T) ([]map[string]any, error) {
 	return maps, nil
 }
 
-// textResult builds a simple text CallToolResult.
-func textResult(format string, args ...any) (*mcp.CallToolResult, any, error) {
-	text := fmt.Sprintf(format, args...)
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: text}},
-	}, nil, nil
+// ConnectionStatusOut is the structured output for autotask_test_connection.
+type ConnectionStatusOut struct {
+	Success   bool   `json:"success" jsonschema:"Whether the connection test succeeded"`
+	Entity    string `json:"entity" jsonschema:"Target entity used for verification"`
+	CanCreate bool   `json:"canCreate" jsonschema:"Permission flag for creating records"`
+	CanUpdate bool   `json:"canUpdate" jsonschema:"Permission flag for updating records"`
+	CanQuery  bool   `json:"canQuery" jsonschema:"Permission flag for querying records"`
+	Message   string `json:"message" jsonschema:"Human-readable connection status message"`
 }
 
-// errorResult builds an error CallToolResult with IsError: true.
-func errorResult(format string, args ...any) (*mcp.CallToolResult, any, error) {
-	text := fmt.Sprintf(format, args...)
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: text}},
-		IsError: true,
-	}, nil, nil
+// DeleteResultOut is the structured output for delete operations.
+type DeleteResultOut struct {
+	Success bool   `json:"success" jsonschema:"Whether the deletion succeeded"`
+	ID      int64  `json:"id" jsonschema:"ID of deleted entity"`
+	Message string `json:"message" jsonschema:"Status message"`
+}
+
+// CategorySummary describes a tool category in list_categories output.
+type CategorySummary struct {
+	Description string   `json:"description" jsonschema:"Summary of tool category purpose"`
+	ToolCount   int      `json:"toolCount" jsonschema:"Number of tools in this category"`
+	Tools       []string `json:"tools" jsonschema:"Names of tools in this category"`
+}
+
+// ToolSummary describes a tool in list_category_tools output.
+type ToolSummary struct {
+	Name        string `json:"name" jsonschema:"Tool identifier"`
+	Description string `json:"description" jsonschema:"Human-readable tool description"`
+}
+
+// CategoryToolsOut is the structured output for autotask_list_category_tools.
+type CategoryToolsOut struct {
+	Category    string        `json:"category" jsonschema:"Category identifier"`
+	Description string        `json:"description" jsonschema:"Category purpose description"`
+	Tools       []ToolSummary `json:"tools" jsonschema:"List of tools in category"`
+}
+
+// RouterOut is the structured output for autotask_router.
+type RouterOut struct {
+	Intent        string `json:"intent" jsonschema:"Original input intent query"`
+	SuggestedTool string `json:"suggestedTool" jsonschema:"Best matching tool name"`
+	Description   string `json:"description" jsonschema:"Guidance or tool description"`
 }
 
 // searchResult builds a compact formatted search result with enhancement.
-func searchResult(ctx context.Context, mapper *services.MappingCache, items []map[string]any, toolName string, maxResults int) (*mcp.CallToolResult, any, error) {
+func searchResult(ctx context.Context, mapper *services.MappingCache, items []map[string]any, toolName string, maxResults int) (*mcp.CallToolResult, services.CompactResponse, error) {
 	if mapper != nil {
 		mapper.EnhanceItems(ctx, items)
 	}
@@ -115,14 +142,18 @@ func searchResult(ctx context.Context, mapper *services.MappingCache, items []ma
 	opts := services.FormatOptions{MaxResults: maxResults}
 	compact := services.FormatCompactResponse(items, entityType, opts)
 
-	data, err := json.Marshal(compact)
-	if err != nil {
-		return errorResult("failed to marshal response: %v", err)
-	}
+	return nil, compact, nil
+}
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: string(data)}},
-	}, nil, nil
+// emptySearchResult returns a zero-item compact response for searches matching no records.
+func emptySearchResult() (*mcp.CallToolResult, services.CompactResponse, error) {
+	return nil, services.CompactResponse{
+		Summary: services.CompactSummary{
+			Returned: 0,
+			HasMore:  false,
+		},
+		Items: []map[string]any{},
+	}, nil
 }
 
 // defaultMaxResults returns the effective max results limit clamped to [1, maxVal].

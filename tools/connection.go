@@ -18,14 +18,20 @@ func RegisterConnectionTools(s *mcp.Server, client *autotask.Client) {
 }
 
 // testConnectionHandler returns a handler that tests the Autotask API connection.
-func testConnectionHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, any, error) {
+func testConnectionHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, ConnectionStatusOut, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, ConnectionStatusOut, error) {
 		info, err := metadata.GetEntityInfo(ctx, client, "Tickets")
 		if err != nil {
-			return errorResult("connection test failed: %v", err)
+			return nil, ConnectionStatusOut{}, err
 		}
 
-		return textResult("Connection successful. Tickets entity: canCreate=%v canUpdate=%v canQuery=%v",
-			info.CanCreate, info.CanUpdate, info.CanQuery)
+		return nil, ConnectionStatusOut{
+			Success:   true,
+			Entity:    "Tickets",
+			CanCreate: info.CanCreate,
+			CanUpdate: info.CanUpdate,
+			CanQuery:  info.CanQuery,
+			Message: "Connection successful",
+		}, nil
 	}
 }

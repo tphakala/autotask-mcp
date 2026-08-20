@@ -150,6 +150,24 @@ func TestIntegration_CreateAndGetTicket(t *testing.T) {
 	if getResult.IsError {
 		t.Fatalf("get_ticket_details returned error: %v", getResult.Content)
 	}
+	if len(getResult.Content) == 0 {
+		t.Fatal("expected non-empty content in get_ticket_details response")
+	}
+	getText, ok := getResult.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatal("expected TextContent in get_ticket_details response")
+	}
+	var getResp map[string]any
+	if err := json.Unmarshal([]byte(getText.Text), &getResp); err != nil {
+		t.Fatalf("failed to parse get_ticket_details response: %v", err)
+	}
+	idVal, ok := getResp["id"]
+	if !ok {
+		t.Fatal("expected 'id' in get_ticket_details response")
+	}
+	if fVal, isFloat := idVal.(float64); !isFloat || int64(fVal) != ticketID {
+		t.Errorf("expected id=%d, got %v", ticketID, idVal)
+	}
 }
 
 // TestIntegration_SearchCompanies verifies the search_companies tool returns
@@ -179,6 +197,13 @@ func TestIntegration_SearchCompanies(t *testing.T) {
 	}
 	if len(result.Content) == 0 {
 		t.Fatal("expected at least one content item")
+	}
+	textContent, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatal("expected TextContent in search_companies response")
+	}
+	if !strings.Contains(textContent.Text, "Alpha Corp") || !strings.Contains(textContent.Text, "Beta LLC") {
+		t.Errorf("expected search_companies to contain seeded companies, got: %s", textContent.Text)
 	}
 }
 

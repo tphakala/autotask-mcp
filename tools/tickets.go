@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -83,8 +82,8 @@ func RegisterTicketTools(s *mcp.Server, client *autotask.Client, mapper *service
 }
 
 // searchTicketsHandler returns a handler that searches tickets using the provided filters.
-func searchTicketsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketsInput) (*mcp.CallToolResult, any, error) {
+func searchTicketsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 
 		q := autotask.NewQuery().Limit(maxResults)
@@ -120,16 +119,16 @@ func searchTicketsHandler(client *autotask.Client, mapper *services.MappingCache
 
 		tickets, err := autotask.List[entities.Ticket](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search tickets: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(tickets) == 0 {
-			return textResult("No tickets found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(tickets)
 		if err != nil {
-			return errorResult("failed to convert tickets: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, mapper, maps, "autotask_search_tickets", maxResults)
@@ -137,34 +136,29 @@ func searchTicketsHandler(client *autotask.Client, mapper *services.MappingCache
 }
 
 // getTicketDetailsHandler returns a handler that retrieves a single ticket by ID.
-func getTicketDetailsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketDetailsInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketDetailsInput) (*mcp.CallToolResult, any, error) {
+func getTicketDetailsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketDetailsInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in GetTicketDetailsInput) (*mcp.CallToolResult, map[string]any, error) {
 		ticket, err := autotask.Get[entities.Ticket](ctx, client, in.TicketID)
 		if err != nil {
-			return errorResult("failed to get ticket %d: %v", in.TicketID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(ticket)
 		if err != nil {
-			return errorResult("failed to convert ticket: %v", err)
+			return nil, nil, err
 		}
 
 		if mapper != nil {
 			mapper.EnhanceItems(ctx, []map[string]any{m})
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal ticket: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // createTicketHandler returns a handler that creates a new ticket.
-func createTicketHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketInput) (*mcp.CallToolResult, any, error) {
+func createTicketHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketInput) (*mcp.CallToolResult, map[string]any, error) {
 		ticket := &entities.Ticket{
 			CompanyID:   autotask.Set(in.CompanyID),
 			Title:       autotask.Set(in.Title),
@@ -189,26 +183,21 @@ func createTicketHandler(client *autotask.Client) func(ctx context.Context, req 
 
 		created, err := autotask.Create[entities.Ticket](ctx, client, ticket)
 		if err != nil {
-			return errorResult("failed to create ticket: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created ticket: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created ticket: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // updateTicketHandler returns a handler that updates an existing ticket.
-func updateTicketHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in UpdateTicketInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in UpdateTicketInput) (*mcp.CallToolResult, any, error) {
+func updateTicketHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in UpdateTicketInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in UpdateTicketInput) (*mcp.CallToolResult, map[string]any, error) {
 		ticket := &entities.Ticket{
 			ID: autotask.Set(in.TicketID),
 		}
@@ -234,7 +223,7 @@ func updateTicketHandler(client *autotask.Client) func(ctx context.Context, req 
 		if in.DueDateTime != "" {
 			t, err := parseDate(in.DueDateTime)
 			if err != nil {
-				return errorResult("invalid dueDateTime format (expected YYYY-MM-DD or RFC3339): %v", err)
+				return nil, nil, err
 			}
 			ticket.DueDateTime = autotask.Set(t)
 		}
@@ -244,19 +233,14 @@ func updateTicketHandler(client *autotask.Client) func(ctx context.Context, req 
 
 		updated, err := autotask.Update[entities.Ticket](ctx, client, ticket)
 		if err != nil {
-			return errorResult("failed to update ticket %d: %v", in.TicketID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(updated)
 		if err != nil {
-			return errorResult("failed to convert updated ticket: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal updated ticket: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -64,8 +63,8 @@ func RegisterCompanyTools(s *mcp.Server, client *autotask.Client, mapper *servic
 }
 
 // searchCompaniesHandler returns a handler that searches companies using the provided filters.
-func searchCompaniesHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompaniesInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompaniesInput) (*mcp.CallToolResult, any, error) {
+func searchCompaniesHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompaniesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompaniesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 200)
 
 		q := autotask.NewQuery().Limit(maxResults)
@@ -79,16 +78,16 @@ func searchCompaniesHandler(client *autotask.Client, mapper *services.MappingCac
 
 		companies, err := autotask.List[entities.Company](ctx, client, q)
 		if err != nil {
-			return errorResult("failed to search companies: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		if len(companies) == 0 {
-			return textResult("No companies found")
+			return emptySearchResult()
 		}
 
 		maps, err := entitiesToMaps(companies)
 		if err != nil {
-			return errorResult("failed to convert companies: %v", err)
+			return nil, services.CompactResponse{}, err
 		}
 
 		return searchResult(ctx, mapper, maps, "autotask_search_companies", maxResults)
@@ -96,8 +95,8 @@ func searchCompaniesHandler(client *autotask.Client, mapper *services.MappingCac
 }
 
 // createCompanyHandler returns a handler that creates a new company.
-func createCompanyHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyInput) (*mcp.CallToolResult, any, error) {
+func createCompanyHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyInput) (*mcp.CallToolResult, map[string]any, error) {
 		company := &entities.Company{
 			CompanyName: autotask.Set(in.CompanyName),
 			CompanyType: autotask.Set(int64(in.CompanyType)),
@@ -127,26 +126,21 @@ func createCompanyHandler(client *autotask.Client) func(ctx context.Context, req
 
 		created, err := autotask.Create[entities.Company](ctx, client, company)
 		if err != nil {
-			return errorResult("failed to create company: %v", err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(created)
 		if err != nil {
-			return errorResult("failed to convert created company: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal created company: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
 
 // updateCompanyHandler returns a handler that updates an existing company.
-func updateCompanyHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in UpdateCompanyInput) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in UpdateCompanyInput) (*mcp.CallToolResult, any, error) {
+func updateCompanyHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in UpdateCompanyInput) (*mcp.CallToolResult, map[string]any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in UpdateCompanyInput) (*mcp.CallToolResult, map[string]any, error) {
 		company := &entities.Company{
 			ID: autotask.Set(in.ID),
 		}
@@ -175,19 +169,14 @@ func updateCompanyHandler(client *autotask.Client) func(ctx context.Context, req
 
 		updated, err := autotask.Update[entities.Company](ctx, client, company)
 		if err != nil {
-			return errorResult("failed to update company %d: %v", in.ID, err)
+			return nil, nil, err
 		}
 
 		m, err := entityToMap(updated)
 		if err != nil {
-			return errorResult("failed to convert updated company: %v", err)
+			return nil, nil, err
 		}
 
-		data, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return errorResult("failed to marshal updated company: %v", err)
-		}
-
-		return textResult("%s", string(data))
+		return nil, m, nil
 	}
 }
