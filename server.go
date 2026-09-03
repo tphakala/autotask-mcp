@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/prompts"
 	"github.com/tphakala/autotask-mcp/resources"
 	"github.com/tphakala/autotask-mcp/services"
 	"github.com/tphakala/autotask-mcp/tools"
@@ -51,6 +52,9 @@ func buildServerWithCaches(client *autotask.Client, serverName string, lazyLoadi
 		tools.RegisterAll(s, client, mapper, picklist)
 	}
 	resources.RegisterAll(s, client)
+	// Prompts are pure guidance (no client), so they register unconditionally,
+	// including in lazy-loading mode where only meta-tools are exposed.
+	prompts.RegisterAll(s)
 
 	return s
 }
