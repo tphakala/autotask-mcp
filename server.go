@@ -239,10 +239,11 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	httpServer := newMCPHTTPServer(addr, mux)
 
 	done := make(chan struct{})
-	defer close(done)
+	shutdownDone := make(chan struct{})
 
-	// Graceful shutdown: drain active connections before closing.
+	// Graceful shutdown: on cancellation, drain active connections before closing.
 	go func() {
+		defer close(shutdownDone)
 		select {
 		case <-ctx.Done():
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -253,11 +254,16 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}()
 
 	logger.Info("autotask-mcp HTTP server listening", "addr", addr, "authMode", cfg.AuthMode)
-	if err := httpServer.ListenAndServe(); errors.Is(err, http.ErrServerClosed) {
+	err := httpServer.ListenAndServe()
+	// Stop the shutdown goroutine (if ListenAndServe failed without a cancellation) and
+	// wait for any in-progress Shutdown to finish draining before returning, so the
+	// deferred clients.closeAll() runs only after in-flight connections have drained.
+	close(done)
+	<-shutdownDone
+	if errors.Is(err, http.ErrServerClosed) {
 		return nil
-	} else {
-		return err
 	}
+	return err
 }
 
 // newMCPHTTPServer builds the HTTP server that serves the /mcp and /health endpoints.
@@ -269,16 +275,20 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 // response write and would forcibly close such a stream once it elapsed, because the SDK
 // (go-sdk v1.7.0) flushes the SSE headers but never clears the connection write deadline.
 //
-// Slowloris protection is retained without a write deadline: ReadHeaderTimeout bounds a
-// slow request-header read, and IdleTimeout bounds an idle keep-alive connection between
-// requests. Request bodies are small JSON-RPC messages, so no ReadTimeout on the full body
-// is needed. The /health handler writes a tiny response promptly and is unaffected.
+// ReadTimeout and IdleTimeout are kept for slowloris protection. ReadTimeout bounds only
+// the reading of a request (headers plus body, a small JSON-RPC message for MCP); it does
+// NOT bound the response, so it never cuts a long-lived SSE stream. A streaming response
+// outlives ReadTimeout: net/http does not abort a response when the connection's read
+// deadline elapses (measured against go1.27, and consistent with #51, where the stream
+// died at the 60s WriteTimeout, not the 30s ReadTimeout). Only WriteTimeout ever bounded
+// the stream, which is why #51 removes just that. The /health handler writes a tiny
+// response promptly and is unaffected.
 func newMCPHTTPServer(addr string, handler http.Handler) *http.Server {
 	return &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 30 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		Addr:        addr,
+		Handler:     handler,
+		ReadTimeout: 30 * time.Second,
+		IdleTimeout: 120 * time.Second,
 		// WriteTimeout is deliberately 0; see the doc comment above.
 	}
 }

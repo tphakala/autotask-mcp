@@ -15,11 +15,8 @@ func TestNewMCPHTTPServer_NoWriteTimeout(t *testing.T) {
 	if srv.WriteTimeout != 0 {
 		t.Errorf("WriteTimeout = %v, want 0 so long-lived SSE streams are not aborted (issue #51)", srv.WriteTimeout)
 	}
-	if srv.ReadTimeout != 0 {
-		t.Errorf("ReadTimeout = %v, want 0; a full-request read deadline is intentionally not set (ReadHeaderTimeout guards slowloris)", srv.ReadTimeout)
-	}
-	if srv.ReadHeaderTimeout != 30*time.Second {
-		t.Errorf("ReadHeaderTimeout = %v, want 30s (slowloris protection)", srv.ReadHeaderTimeout)
+	if srv.ReadTimeout != 30*time.Second {
+		t.Errorf("ReadTimeout = %v, want 30s; it bounds the request read (slowloris) and does not affect SSE responses", srv.ReadTimeout)
 	}
 	if srv.IdleTimeout != 120*time.Second {
 		t.Errorf("IdleTimeout = %v, want 120s", srv.IdleTimeout)

@@ -3,12 +3,17 @@ package main
 import (
 	"container/list"
 	"crypto/sha256"
+	"errors"
 	"sync"
 
 	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"golang.org/x/sync/singleflight"
 )
+
+// errCacheClosed is returned by getOrCreate once closeAll has run, so a request that
+// outlives the shutdown drain cannot insert a client the cache would never close.
+var errCacheClosed = errors.New("client cache is closed")
 
 // tenantClient bundles a per-tenant autotask client with its warm metadata caches.
 // Reusing the same bundle across sessions from one tenant keeps the MappingCache and
@@ -37,6 +42,14 @@ func closeTenant(tc *tenantClient) {
 // between adjacent fields (for example ("ab", "c", ...) and ("a", "bc", ...)). The raw
 // digest bytes are used directly as the map key; the plaintext credentials are never
 // stored or logged.
+//
+// SHA-256 is the right primitive here, not a password KDF (bcrypt/scrypt/argon2): this is
+// an in-process cache key over credentials the process already holds in plaintext, not a
+// stored password verifier. A deliberately slow, salted KDF would be non-deterministic
+// (defeating the lookup) and would add latency to every request, while providing no benefit
+// (the digest lives only in memory and never leaves the process, so there is nothing to
+// brute-force offline). A static-analysis rule that flags "hashing a secret with SHA-256"
+// as weak password hashing does not apply to this use.
 func credentialKey(apiKey, apiSecret, integrationCode string) string {
 	h := sha256.New()
 	h.Write([]byte(apiKey))
@@ -55,20 +68,23 @@ func credentialKey(apiKey, apiSecret, integrationCode string) string {
 // evicted client would be a no-op today and would be unsafe the moment go-autotask gives
 // Close real work, because a concurrent in-flight session may still hold that client.
 // Instead the garbage collector reclaims an evicted client once the last request using it
-// returns. Clients are closed only by closeAll at shutdown. That is safe today only because
-// closing is a no-op (see closeTenant): closeAll does not itself wait for in-flight
-// connections to finish draining, since runHTTP returns (running the deferred closeAll)
-// when the listener closes at the start of Shutdown, not after the drain completes. If
-// go-autotask ever registers a real closer for these clients, closeAll must first wait for
-// Shutdown to return, and deterministic mid-life cleanup would need reference counting
-// driven by a reliable session-end signal; the go-sdk (v1.7.0) exposes no public
-// per-session end callback usable from the getServer factory today.
+// returns. Clients are closed only by closeAll at shutdown, and runHTTP waits for the
+// server's Shutdown to finish draining in-flight connections before that deferred call
+// runs, so under a normal drain no request still holds a client. As a backstop for a
+// request that outlives the drain deadline, closeAll marks the cache closed and getOrCreate
+// then refuses to insert, closing the freshly built client instead, so a client built
+// during shutdown is never orphaned. Closing is a no-op today anyway (see closeTenant); if
+// go-autotask ever registers a real closer for these clients, this drain-then-close
+// ordering plus the closed guard is what keeps it safe, and deterministic mid-life cleanup
+// would still need reference counting driven by a reliable session-end signal (the go-sdk
+// v1.7.0 exposes no public per-session end callback usable from the getServer factory).
 type clientCache struct {
 	mu       sync.Mutex
 	capacity int
 	ll       *list.List               // front = most recently used
 	items    map[string]*list.Element // key -> element holding *cacheEntry
 	group    singleflight.Group       // dedupes concurrent creation of the same key
+	closed   bool                     // set by closeAll; blocks further insertion
 	// closeFn closes an entry at shutdown. It is a field so tests can observe closes
 	// with fake entries; production uses closeTenant.
 	closeFn func(*tenantClient)
@@ -101,6 +117,10 @@ func newClientCache(capacity int) *clientCache {
 func (c *clientCache) getOrCreate(key string, create func() (*tenantClient, error)) (*tenantClient, error) {
 	// Fast path: an existing entry is promoted to most-recently-used and returned.
 	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil, errCacheClosed
+	}
 	if el, ok := c.items[key]; ok {
 		c.ll.MoveToFront(el)
 		tenant := el.Value.(*cacheEntry).tenant
@@ -114,6 +134,10 @@ func (c *clientCache) getOrCreate(key string, create func() (*tenantClient, erro
 		// Re-check under the lock: another goroutine may have populated this key
 		// between our fast-path miss and entering the singleflight group.
 		c.mu.Lock()
+		if c.closed {
+			c.mu.Unlock()
+			return nil, errCacheClosed
+		}
 		if el, ok := c.items[key]; ok {
 			c.ll.MoveToFront(el)
 			tenant := el.Value.(*cacheEntry).tenant
@@ -131,6 +155,13 @@ func (c *clientCache) getOrCreate(key string, create func() (*tenantClient, erro
 		}
 
 		c.mu.Lock()
+		if c.closed {
+			// closeAll ran while we were building. Do not insert into a cleared cache
+			// (closeAll's snapshot would never close this entry); discard the client.
+			c.mu.Unlock()
+			c.closeFn(tenant)
+			return nil, errCacheClosed
+		}
 		el := c.ll.PushFront(&cacheEntry{key: key, tenant: tenant})
 		c.items[key] = el
 		if c.ll.Len() > c.capacity {
@@ -152,12 +183,14 @@ func (c *clientCache) getOrCreate(key string, create func() (*tenantClient, erro
 	return v.(*tenantClient), nil
 }
 
-// closeAll drops and closes every cached entry. It is called once, on graceful shutdown.
-// Closing is a no-op today (see closeTenant), so this is safe even though closeAll does not
-// wait for in-flight connections to finish draining: runHTTP returns, and this deferred
-// call runs, when the listener closes at the start of Shutdown, not after the drain ends.
+// closeAll marks the cache closed, then drops and closes every cached entry. It is called
+// once, on graceful shutdown, after runHTTP has waited for the server to drain in-flight
+// connections. Marking the cache closed makes a getOrCreate that outlived the drain refuse
+// to insert its freshly built client (getOrCreate closes it instead), so no client is
+// orphaned by racing the teardown.
 func (c *clientCache) closeAll() {
 	c.mu.Lock()
+	c.closed = true
 	tenants := make([]*tenantClient, 0, len(c.items))
 	for _, el := range c.items {
 		tenants = append(tenants, el.Value.(*cacheEntry).tenant)

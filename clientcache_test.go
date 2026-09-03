@@ -166,6 +166,43 @@ func TestClientCache_CloseAll(t *testing.T) {
 	}
 }
 
+func TestClientCache_GetOrCreateAfterClose(t *testing.T) {
+	c, _ := newTestCache(4)
+	c.closeAll()
+	created := false
+	got, err := c.getOrCreate("k", func() (*tenantClient, error) {
+		created = true
+		return &tenantClient{}, nil
+	})
+	if !errors.Is(err, errCacheClosed) {
+		t.Fatalf("after closeAll: want errCacheClosed, got tenant=%v err=%v", got, err)
+	}
+	if created {
+		t.Error("create must not run once the cache is closed (fast path rejects before building)")
+	}
+}
+
+func TestClientCache_GetOrCreateRaceWithClose(t *testing.T) {
+	// closeAll firing between create() and insertion: the freshly built tenant must be
+	// closed and not inserted, so a client built during shutdown is never orphaned.
+	c, rec := newTestCache(4)
+	var built *tenantClient
+	got, err := c.getOrCreate("k", func() (*tenantClient, error) {
+		built = &tenantClient{}
+		c.closeAll() // shutdown races in during creation
+		return built, nil
+	})
+	if !errors.Is(err, errCacheClosed) {
+		t.Fatalf("racing close: want errCacheClosed, got tenant=%v err=%v", got, err)
+	}
+	if c.size() != 0 {
+		t.Errorf("a closed insert must not cache anything, size=%d", c.size())
+	}
+	if !rec.has(built) {
+		t.Error("the unpublished tenant built during shutdown must be closed")
+	}
+}
+
 func TestClientCache_CreateErrorNotCached(t *testing.T) {
 	c, rec := newTestCache(4)
 	_, err := c.getOrCreate("k", func() (*tenantClient, error) { return nil, errors.New("boom") })
