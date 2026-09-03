@@ -90,7 +90,7 @@ func getExpenseReportHandler(client *autotask.Client) func(ctx context.Context, 
 func searchExpenseReportsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchExpenseReportsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchExpenseReportsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SubmitterID != 0 {
 			q.Where("submitterID", autotask.OpEq, in.SubmitterID)

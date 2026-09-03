@@ -3,8 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -60,12 +63,43 @@ func defaultConfigPath() string {
 	return filepath.Join(home, ".config", "autotask-mcp", "config.json")
 }
 
-// checkSecureFilePermissions checks whether file permissions are 0600 or stricter.
-// If permissions are more permissive than 0600 on unix, it prints a warning to os.Stderr.
-func checkSecureFilePermissions(path string, perm os.FileMode) {
-	if perm&0077 != 0 {
-		fmt.Fprintf(os.Stderr, "autotask-mcp: warning: config file %s has insecure permissions %#o (expected 0600)\n", path, perm)
+// hasInsecurePerm reports whether perm grants any group or other access. It is
+// meaningful only on unix: Windows synthesizes permission bits, so callers gate
+// this check on the platform.
+func hasInsecurePerm(perm os.FileMode) bool {
+	return perm&0077 != 0
+}
+
+// validateFileAPIURL constrains an api_url that originates in the on-disk config
+// file to an Autotask REST host over HTTPS. The config file is an attacker-writable
+// surface; without this a tampered api_url could redirect requests that carry
+// environment provided credentials to an arbitrary endpoint. The AUTOTASK_API_URL
+// environment override is intentionally NOT constrained (see applyEnvOverrides): it
+// comes from the trusted process environment and is the escape hatch for proxy or
+// gateway deployments that front Autotask on a non-autotask.net host.
+//
+// Error messages never echo URL userinfo: a misconfigured api_url can embed
+// credentials (https://user:pass@host), and the error is printed to stderr.
+// url.Redacted() masks only the password (it preserves the username), so the reject
+// paths echo only non-sensitive parts: the scheme, or the parsed host.
+func validateFileAPIURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("api_url is not a valid URL")
 	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("api_url must use https, got scheme %q", u.Scheme)
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "" {
+		return fmt.Errorf("api_url has no host")
+	}
+	// Match the domain itself or any subdomain, but not look-alikes such as
+	// "evil-autotask.net" or "autotask.net.evil.com" (the leading dot is required).
+	if host != "autotask.net" && !strings.HasSuffix(host, ".autotask.net") {
+		return fmt.Errorf("api_url host %q is not an autotask.net endpoint; set AUTOTASK_API_URL for a custom host", host)
+	}
+	return nil
 }
 
 // loadFileConfig reads and parses the JSON config file from disk.
@@ -74,10 +108,20 @@ func loadFileConfig(path string) (FileConfig, bool, error) {
 	if path == "" {
 		path = defaultConfigPath()
 	}
-	info, err := os.Stat(path)
+	// Open first, then stat and read through the SAME file handle. Checking perms
+	// on the open descriptor (not re-resolving the path) closes the TOCTOU window in
+	// which the path could be swapped for a symlink to an insecure file between the
+	// check and the read.
+	f, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return FileConfig{}, false, nil
 	}
+	if err != nil {
+		return FileConfig{}, false, fmt.Errorf("opening config file %s: %w", path, err)
+	}
+	defer f.Close() //nolint:errcheck // read-only handle
+
+	info, err := f.Stat()
 	if err != nil {
 		return FileConfig{}, false, fmt.Errorf("stat config file %s: %w", path, err)
 	}
@@ -85,9 +129,16 @@ func loadFileConfig(path string) (FileConfig, bool, error) {
 		return FileConfig{}, false, fmt.Errorf("config path %s is a directory, expected JSON file", path)
 	}
 
-	checkSecureFilePermissions(path, info.Mode().Perm())
+	// Fail closed on a group/world-accessible config: it holds credentials, so
+	// anyone who can read or write it can steal them. The file is skipped entirely
+	// (not merged) rather than loaded with a warning. The api_url is validated later,
+	// on the server path only (see loadConfig), so the config CLI can still read and
+	// repair a file whose api_url is bad.
+	if perm := info.Mode().Perm(); runtime.GOOS != "windows" && hasInsecurePerm(perm) {
+		return FileConfig{}, false, fmt.Errorf("refusing to load config file %s: insecure permissions %#o (want 0600); run: chmod 600 %s", path, perm, path)
+	}
 
-	data, err := os.ReadFile(path)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return FileConfig{}, false, fmt.Errorf("reading config file %s: %w", path, err)
 	}
@@ -109,6 +160,13 @@ func saveFileConfig(path string, fc FileConfig) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("creating config directory %s: %w", dir, err)
+	}
+	// MkdirAll does not tighten a directory that already exists more permissively,
+	// so chmod it explicitly: the config file it holds carries credentials.
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(dir, 0700); err != nil {
+			return fmt.Errorf("securing config directory %s: %w", dir, err)
+		}
 	}
 
 	data, err := json.MarshalIndent(fc, "", "  ")
@@ -153,6 +211,19 @@ func loadConfig() Config {
 	fileCfg, loaded, err := loadFileConfig(cfgPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "autotask-mcp: error loading config file %s: %v\n", cfgPath, err)
+	}
+
+	// The file's api_url is an attacker-writable surface, so constrain it to an
+	// approved endpoint before it can redirect credential-bearing requests. An
+	// invalid value is ignored (the client falls back to zone discovery) rather than
+	// failing startup or dropping the rest of the file; custom hosts use the trusted
+	// AUTOTASK_API_URL override. Validated here on the server path only, so the config
+	// CLI can still read and repair such a file.
+	if fileCfg.APIURL != "" {
+		if verr := validateFileAPIURL(fileCfg.APIURL); verr != nil {
+			fmt.Fprintf(os.Stderr, "autotask-mcp: ignoring config file api_url: %v\n", verr)
+			fileCfg.APIURL = ""
+		}
 	}
 
 	cfg := Config{
@@ -383,6 +454,15 @@ func setConfigField(fc *FileConfig, key, val string) error {
 	case "integration_code", "integrationcode":
 		fc.IntegrationCode = val
 	case "api_url", "apiurl":
+		// Validate on write, matching http_port/lazy_loading, so the CLI cannot
+		// persist a value that the server would later refuse to use. An empty value
+		// clears the field. Custom hosts belong in the AUTOTASK_API_URL environment
+		// override, not the file.
+		if val != "" {
+			if err := validateFileAPIURL(val); err != nil {
+				return err
+			}
+		}
 		fc.APIURL = val
 	case "server_name", "servername":
 		fc.ServerName = val

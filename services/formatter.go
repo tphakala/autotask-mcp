@@ -101,11 +101,28 @@ func FrameUntrustedMapFields(m map[string]any) {
 			}
 		}
 	}
+	// userDefinedFields is an array of {name, value} pairs whose value is
+	// free-form customer-controlled text. It is not a top-level string field, so
+	// frame each entry's value explicitly rather than leaving it unbounded.
+	if udfs, ok := m["userDefinedFields"].([]any); ok {
+		for _, u := range udfs {
+			udf, ok := u.(map[string]any)
+			if !ok {
+				continue
+			}
+			if v, ok := udf["value"].(string); ok && v != "" {
+				udf["value"] = FrameUntrustedContent(v)
+			}
+		}
+	}
 }
 
 // FormatCompactResponse formats a slice of raw items into a compact response,
 // picking only summary fields for the given entity type and framing untrusted text.
-func FormatCompactResponse(items []map[string]any, entityType string, opts FormatOptions) CompactResponse {
+// The caller supplies hasMore (whether more records match beyond those returned)
+// and passes items already trimmed to the result limit; see searchResult, which
+// derives hasMore accurately by over-fetching one record.
+func FormatCompactResponse(items []map[string]any, entityType string, opts FormatOptions, hasMore bool) CompactResponse {
 	compact := make([]map[string]any, 0, len(items))
 	for _, item := range items {
 		summaryItem := pickSummaryFields(item, entityType)
@@ -113,7 +130,6 @@ func FormatCompactResponse(items []map[string]any, entityType string, opts Forma
 		compact = append(compact, summaryItem)
 	}
 
-	hasMore := len(items) >= opts.MaxResults && opts.MaxResults > 0
 	hint := ""
 	if hasMore {
 		hint = "Maximum result limit reached. Use narrower search filters to find specific records."

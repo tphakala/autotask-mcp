@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -169,27 +168,18 @@ func getTicketNoteHandler(client *autotask.Client) func(ctx context.Context, req
 // searchTicketNotesHandler returns a handler that lists notes for a ticket.
 func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		// Use ListChildRaw (not ListChild + entitiesToMaps) so the note body is
+		// Use the raw iterator (not ListChild + entitiesToMaps) so the note body is
 		// truncated BEFORE it is framed. entitiesToMaps frames via entityToMap, and
 		// truncating an already-framed body severs the closing boundary marker and
 		// leaves a stray escaped tag. This mirrors the project/company note handlers.
-		notes, err := autotask.ListChildRaw(ctx, client, "Tickets", in.TicketID, "TicketNotes")
+		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		notes, hasMore, err := collectBoundedChildRaw(
+			autotask.ListChildRawIter(ctx, client, "Tickets", in.TicketID, "TicketNotes"), maxResults)
 		if err != nil {
-			var notFound *autotask.NotFoundError
-			if errors.As(err, &notFound) {
-				return emptySearchResult()
-			}
 			return nil, services.CompactResponse{}, err
 		}
-
 		if len(notes) == 0 {
 			return emptySearchResult()
-		}
-
-		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
-		hasMore := len(notes) >= maxResults && maxResults > 0
-		if len(notes) > maxResults {
-			notes = notes[:maxResults]
 		}
 
 		for _, m := range notes {
@@ -268,23 +258,14 @@ func getProjectNoteHandler(client *autotask.Client) func(ctx context.Context, re
 // searchProjectNotesHandler returns a handler that lists notes for a project.
 func searchProjectNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		notes, err := autotask.ListChildRaw(ctx, client, "Projects", in.ProjectID, "ProjectNotes")
+		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		notes, hasMore, err := collectBoundedChildRaw(
+			autotask.ListChildRawIter(ctx, client, "Projects", in.ProjectID, "ProjectNotes"), maxResults)
 		if err != nil {
-			var notFound *autotask.NotFoundError
-			if errors.As(err, &notFound) {
-				return emptySearchResult()
-			}
 			return nil, services.CompactResponse{}, err
 		}
-
 		if len(notes) == 0 {
 			return emptySearchResult()
-		}
-
-		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
-		hasMore := len(notes) >= maxResults && maxResults > 0
-		if len(notes) > maxResults {
-			notes = notes[:maxResults]
 		}
 
 		for _, m := range notes {
@@ -359,23 +340,14 @@ func getCompanyNoteHandler(client *autotask.Client) func(ctx context.Context, re
 // searchCompanyNotesHandler returns a handler that lists notes for a company.
 func searchCompanyNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompanyNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompanyNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		notes, err := autotask.ListChildRaw(ctx, client, "Companies", in.CompanyID, "CompanyNotes")
+		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		notes, hasMore, err := collectBoundedChildRaw(
+			autotask.ListChildRawIter(ctx, client, "Companies", in.CompanyID, "CompanyNotes"), maxResults)
 		if err != nil {
-			var notFound *autotask.NotFoundError
-			if errors.As(err, &notFound) {
-				return emptySearchResult()
-			}
 			return nil, services.CompactResponse{}, err
 		}
-
 		if len(notes) == 0 {
 			return emptySearchResult()
-		}
-
-		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
-		hasMore := len(notes) >= maxResults && maxResults > 0
-		if len(notes) > maxResults {
-			notes = notes[:maxResults]
 		}
 
 		for _, m := range notes {

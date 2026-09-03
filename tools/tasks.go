@@ -50,7 +50,7 @@ func searchTasksHandler(client *autotask.Client, mapper *services.MappingCache) 
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTasksInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
 
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
 			q.Where("title", autotask.OpContains, in.SearchTerm)

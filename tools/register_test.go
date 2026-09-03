@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/tphakala/autotask-mcp/services"
 )
 
 func TestDefaultMaxResults_Default(t *testing.T) {
@@ -172,5 +174,106 @@ func TestEmptySearchResult(t *testing.T) {
 	}
 	if len(compact.Items) != 0 {
 		t.Errorf("expected 0 items, got %d", len(compact.Items))
+	}
+}
+
+// TestSearchResult_HasMoreBoundaries pins every branch of searchResult's accurate
+// hasMore: over the limit (trim + hasMore), exactly the limit below the ceiling
+// (accurate false, the case the old len>=maxResults heuristic got wrong), exactly the
+// ceiling (conservative hasMore fallback), and under the limit (false). The ceiling
+// branch is otherwise unreachable in a wire test without seeding 500 records.
+func TestSearchResult_HasMoreBoundaries(t *testing.T) {
+	mk := func(n int) []map[string]any {
+		items := make([]map[string]any, n)
+		for i := range items {
+			items[i] = map[string]any{"id": float64(i)}
+		}
+		return items
+	}
+
+	cases := []struct {
+		name        string
+		count       int
+		maxResults  int
+		wantRet     int
+		wantHasMore bool
+	}{
+		{"over limit", 4, 3, 3, true},
+		{"exactly limit below ceiling", 3, 3, 3, false},
+		{"exactly ceiling", autotaskMaxRecords, autotaskMaxRecords, autotaskMaxRecords, true},
+		{"under limit", 2, 3, 2, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, resp, err := searchResult(context.Background(), nil, mk(tc.count), "autotask_search_tickets", tc.maxResults)
+			if err != nil {
+				t.Fatalf("searchResult: %v", err)
+			}
+			if resp.Summary.Returned != tc.wantRet {
+				t.Errorf("Returned = %d, want %d", resp.Summary.Returned, tc.wantRet)
+			}
+			if resp.Summary.HasMore != tc.wantHasMore {
+				t.Errorf("HasMore = %v, want %v", resp.Summary.HasMore, tc.wantHasMore)
+			}
+		})
+	}
+}
+
+// TestRegisterAll_ToolSetMatchesDispatcherAndCategories pins the three
+// hand-maintained tool lists together: the tools RegisterAll actually registers
+// on the server (full mode), the buildToolDispatcher runners (lazy execution via
+// autotask_execute_tool), and ToolCategories (lazy discovery and routing). A tool
+// added to one but not the others would compile and pass every other test, yet be
+// silently uncallable or undiscoverable in lazy mode. This asserts set-equality of
+// all three so that gap cannot ship.
+func TestRegisterAll_ToolSetMatchesDispatcherAndCategories(t *testing.T) {
+	cs, client := setupWireTest(t)
+	ctx := context.Background()
+
+	// The set the built server actually exposes in full mode.
+	registered := map[string]struct{}{}
+	for tool, err := range cs.Tools(ctx, nil) {
+		if err != nil {
+			t.Fatalf("enumerating registered tools: %v", err)
+		}
+		registered[tool.Name] = struct{}{}
+	}
+	if len(registered) == 0 {
+		t.Fatal("RegisterAll registered no tools")
+	}
+
+	// The lazy dispatcher set.
+	mapper := services.NewMappingCache(client)
+	picklist := services.NewPicklistCache(client)
+	dispatched := map[string]struct{}{}
+	for name := range buildToolDispatcher(client, mapper, picklist) {
+		dispatched[name] = struct{}{}
+	}
+
+	// The lazy discovery/routing set.
+	categorized := map[string]struct{}{}
+	for _, cat := range ToolCategories {
+		for _, name := range cat.Tools {
+			categorized[name] = struct{}{}
+		}
+	}
+
+	for name := range registered {
+		if _, ok := dispatched[name]; !ok {
+			t.Errorf("tool %q is registered by RegisterAll but missing from buildToolDispatcher (uncallable via autotask_execute_tool in lazy mode)", name)
+		}
+		if _, ok := categorized[name]; !ok {
+			t.Errorf("tool %q is registered by RegisterAll but missing from ToolCategories (undiscoverable in lazy mode)", name)
+		}
+	}
+	for name := range dispatched {
+		if _, ok := registered[name]; !ok {
+			t.Errorf("tool %q is in buildToolDispatcher but not registered by RegisterAll", name)
+		}
+	}
+	for name := range categorized {
+		if _, ok := registered[name]; !ok {
+			t.Errorf("tool %q is in ToolCategories but not registered by RegisterAll", name)
+		}
 	}
 }

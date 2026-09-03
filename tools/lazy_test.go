@@ -175,6 +175,54 @@ func TestExecuteTool_EmptyToolName(t *testing.T) {
 	}
 }
 
+// TestExecuteTool_RejectsMissingRequiredArgs verifies the lazy proxy enforces the
+// same required-field validation a direct tool call gets. search_ticket_notes
+// requires ticketId; with it absent the handler would otherwise run against ticket
+// 0 and return an empty success, so an error here proves schema validation fired
+// before dispatch (see makeRunner). This is the #39 fix: without it, a call like
+// {"toolName":"autotask_delete_quote_item","arguments":{}} would reach the handler
+// with zero IDs.
+func TestExecuteTool_RejectsMissingRequiredArgs(t *testing.T) {
+	cs, _ := setupLazyWireTest(t)
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_execute_tool",
+		Arguments: map[string]any{
+			"toolName":  "autotask_search_ticket_notes",
+			"arguments": map[string]any{},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected IsError=true: a required field is missing and validation must reject before dispatch")
+	}
+}
+
+// TestExecuteTool_RejectsUnknownArg verifies the lazy proxy rejects unknown
+// arguments (additionalProperties:false) exactly as a direct call would. A handler
+// silently ignores unknown JSON fields, so only schema validation catches this.
+func TestExecuteTool_RejectsUnknownArg(t *testing.T) {
+	cs, _ := setupLazyWireTest(t)
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_execute_tool",
+		Arguments: map[string]any{
+			"toolName":  "autotask_search_tickets",
+			"arguments": map[string]any{"bogusField": "x"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected IsError=true: an unknown argument must be rejected by additionalProperties:false")
+	}
+}
+
 func TestDispatcher_AllCategoryToolsCovered(t *testing.T) {
 	_, client := autotasktest.NewServer(t)
 	mapper := services.NewMappingCache(client)

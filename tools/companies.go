@@ -67,7 +67,7 @@ func searchCompaniesHandler(client *autotask.Client, mapper *services.MappingCac
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompaniesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 200)
 
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
 			q.Where("companyName", autotask.OpContains, in.SearchTerm)

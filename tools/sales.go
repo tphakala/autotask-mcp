@@ -105,7 +105,7 @@ func getProductHandler(client *autotask.Client) func(ctx context.Context, req *m
 func searchProductsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProductsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProductsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
 			q.Where("name", autotask.OpContains, in.SearchTerm)
@@ -153,7 +153,7 @@ func getServiceHandler(client *autotask.Client) func(ctx context.Context, req *m
 func searchServicesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchServicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchServicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
 			q.Where("serviceName", autotask.OpContains, in.SearchTerm)
@@ -201,7 +201,7 @@ func getServiceBundleHandler(client *autotask.Client) func(ctx context.Context, 
 func searchServiceBundlesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchServiceBundlesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchServiceBundlesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
 			q.Where("serviceBundleName", autotask.OpContains, in.SearchTerm)

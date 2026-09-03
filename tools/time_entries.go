@@ -104,7 +104,7 @@ func searchTimeEntriesHandler(client *autotask.Client, mapper *services.MappingC
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTimeEntriesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.ResourceID != 0 {
 			q.Where("resourceID", autotask.OpEq, in.ResourceID)

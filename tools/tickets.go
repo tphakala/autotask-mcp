@@ -86,7 +86,7 @@ func searchTicketsHandler(client *autotask.Client, mapper *services.MappingCache
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		// Default: exclude completed tickets (status 5) unless a specific status is requested.
 		if in.Status != 0 {

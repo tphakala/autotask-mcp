@@ -31,7 +31,7 @@ func searchResourcesHandler(client *autotask.Client) func(ctx context.Context, r
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchResourcesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
 
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
 			q.Or(

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"errors"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -62,23 +61,14 @@ func getTicketAttachmentHandler(client *autotask.Client) func(ctx context.Contex
 // searchTicketAttachmentsHandler returns a handler that lists attachments for a ticket without heavy base64 data.
 func searchTicketAttachmentsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketAttachmentsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketAttachmentsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		attachments, err := autotask.ListChildRaw(ctx, client, "Tickets", in.TicketID, "TicketAttachments")
+		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		attachments, hasMore, err := collectBoundedChildRaw(
+			autotask.ListChildRawIter(ctx, client, "Tickets", in.TicketID, "TicketAttachments"), maxResults)
 		if err != nil {
-			var notFound *autotask.NotFoundError
-			if errors.As(err, &notFound) {
-				return emptySearchResult()
-			}
 			return nil, services.CompactResponse{}, err
 		}
-
 		if len(attachments) == 0 {
 			return emptySearchResult()
-		}
-
-		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
-		hasMore := len(attachments) >= maxResults && maxResults > 0
-		if len(attachments) > maxResults {
-			attachments = attachments[:maxResults]
 		}
 
 		for _, attachment := range attachments {

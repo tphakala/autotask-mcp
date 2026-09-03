@@ -78,6 +78,46 @@ func TestSearchTicketsHandler_ReturnsTickets(t *testing.T) {
 	}
 }
 
+// TestSearchTicketsHandler_AccurateHasMore verifies the over-fetch-by-one gives an
+// accurate hasMore for top-level searches. Exactly maxResults matching records
+// reports hasMore=false; the previous len>=maxResults heuristic reported a false
+// positive here. More than maxResults reports hasMore=true with the result capped.
+func TestSearchTicketsHandler_AccurateHasMore(t *testing.T) {
+	seed := func(n int) []entities.Ticket {
+		tickets := make([]entities.Ticket, 0, n)
+		for i := 0; i < n; i++ {
+			tickets = append(tickets, autotasktest.TicketFixture(func(tk *entities.Ticket) {
+				tk.Status = autotask.Set(int64(1))
+			}))
+		}
+		return tickets
+	}
+	call := func(t *testing.T, cs *mcp.ClientSession, maxResults int) services.CompactResponse {
+		t.Helper()
+		result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+			Name:      "autotask_search_tickets",
+			Arguments: map[string]any{"status": 1, "maxResults": maxResults},
+		})
+		if err != nil {
+			t.Fatalf("unexpected wire error: %v", err)
+		}
+		if result.IsError {
+			t.Fatalf("expected non-error result, got: %v", result)
+		}
+		return parseStructuredContent[services.CompactResponse](t, result)
+	}
+
+	csExact, _ := setupWireTest(t, autotasktest.WithEntity(seed(3)...))
+	if exact := call(t, csExact, 3); exact.Summary.Returned != 3 || exact.Summary.HasMore {
+		t.Errorf("exact count: got Returned=%d HasMore=%v, want 3/false", exact.Summary.Returned, exact.Summary.HasMore)
+	}
+
+	csMore, _ := setupWireTest(t, autotasktest.WithEntity(seed(5)...))
+	if more := call(t, csMore, 3); more.Summary.Returned != 3 || !more.Summary.HasMore {
+		t.Errorf("over limit: got Returned=%d HasMore=%v, want 3/true", more.Summary.Returned, more.Summary.HasMore)
+	}
+}
+
 // TestSearchTicketsHandler_DefaultExcludesCompleted verifies that the default query
 // path (no status filter provided) executes cleanly over wire.
 func TestSearchTicketsHandler_DefaultExcludesCompleted(t *testing.T) {
