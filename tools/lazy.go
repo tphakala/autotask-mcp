@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
@@ -175,15 +176,62 @@ type RouterInput struct {
 // ToolRunner represents a dynamic dispatch function for executing a tool with generic JSON arguments.
 type ToolRunner func(ctx context.Context, rawArgs map[string]any) (*mcp.CallToolResult, any, error)
 
+// resolveInputSchema builds the resolved JSON schema for a tool's input type the
+// same way the MCP SDK does when registering a tool (jsonschema.For + Resolve with
+// ValidateDefaults), so lazy dispatch can enforce the identical contract. It returns
+// nil if inference or resolution fails; callers then skip validation rather than
+// reject every call for a schema that never validated anything to begin with.
+func resolveInputSchema[In any]() *jsonschema.Resolved {
+	schema, err := jsonschema.For[In](nil)
+	if err != nil {
+		return nil
+	}
+	resolved, err := schema.Resolve(&jsonschema.ResolveOptions{ValidateDefaults: true})
+	if err != nil {
+		return nil
+	}
+	return resolved
+}
+
 // makeRunner converts a typed MCP tool handler into a dynamic ToolRunner.
+//
+// A direct MCP tool call is validated by the SDK against the tool's inferred input
+// schema (required fields present, no unknown properties) before the handler runs.
+// The lazy autotask_execute_tool proxy dispatches here instead, so makeRunner must
+// reproduce that validation itself: without it a call like
+// {"toolName":"autotask_delete_quote_item","arguments":{}} would reach the delete
+// handler with zero IDs. The schema is resolved once per tool at dispatcher build
+// time and reused for every call.
 func makeRunner[In, Out any](handler func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error)) ToolRunner {
+	resolved := resolveInputSchema[In]()
 	return func(ctx context.Context, rawArgs map[string]any) (*mcp.CallToolResult, any, error) {
 		if handler == nil {
 			return nil, nil, fmt.Errorf("tool handler is not configured")
 		}
+
+		args := rawArgs
+		if args == nil {
+			args = map[string]any{}
+		}
+
+		// Validate the raw arguments against the tool's input schema, mirroring the
+		// SDK's direct-call path: unmarshal to a map, apply defaults, then validate.
+		if resolved != nil {
+			var v any = args
+			if err := resolved.ApplyDefaults(&v); err != nil {
+				return nil, nil, fmt.Errorf("applying argument defaults: %w", err)
+			}
+			if err := resolved.Validate(&v); err != nil {
+				return nil, nil, fmt.Errorf("invalid arguments: %w", err)
+			}
+			if m, ok := v.(map[string]any); ok {
+				args = m
+			}
+		}
+
 		var in In
-		if len(rawArgs) > 0 {
-			data, err := json.Marshal(rawArgs)
+		if len(args) > 0 {
+			data, err := json.Marshal(args)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to encode tool arguments: %w", err)
 			}

@@ -31,7 +31,7 @@ func RegisterConfigItemTools(s *mcp.Server, client *autotask.Client, mapper *ser
 func searchConfigurationItemsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchConfigurationItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchConfigurationItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
 			q.Where("referenceTitle", autotask.OpContains, in.SearchTerm)

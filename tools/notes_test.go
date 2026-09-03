@@ -131,6 +131,81 @@ func TestSearchTicketNotesHandler_TruncationAndFraming(t *testing.T) {
 	}
 }
 
+// TestSearchTicketNotesHandler_BoundedByMaxResults seeds more notes than the
+// requested limit and asserts the handler returns exactly maxResults and reports
+// hasMore. It pins the bounded-fetch contract: the caller sees only the capped set.
+func TestSearchTicketNotesHandler_BoundedByMaxResults(t *testing.T) {
+	notes := make([]entities.TicketNote, 0, 5)
+	for i := 0; i < 5; i++ {
+		notes = append(notes, autotasktest.TicketNoteFixture())
+	}
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(notes...))
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_ticket_notes",
+		Arguments: map[string]any{
+			"ticketId":   3001,
+			"maxResults": 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected non-error result, got: %v", result)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned != 3 {
+		t.Errorf("expected 3 returned notes (bounded to maxResults), got %d", resp.Summary.Returned)
+	}
+	if len(resp.Items) != 3 {
+		t.Errorf("expected 3 items, got %d", len(resp.Items))
+	}
+	if !resp.Summary.HasMore {
+		t.Error("expected hasMore=true when more notes exist beyond maxResults")
+	}
+	if resp.Summary.MaxResults != 3 {
+		t.Errorf("expected maxResults=3 in summary, got %d", resp.Summary.MaxResults)
+	}
+}
+
+// TestSearchTicketNotesHandler_ExactCountReportsNoMore pins the corrected hasMore
+// semantics: with exactly maxResults notes and no more, hasMore is false. The prior
+// implementation reported hasMore=true here (it tested len(all) >= maxResults on the
+// fully buffered slice), a false positive the bounded peek-one-extra fetch removes.
+func TestSearchTicketNotesHandler_ExactCountReportsNoMore(t *testing.T) {
+	notes := make([]entities.TicketNote, 0, 3)
+	for i := 0; i < 3; i++ {
+		notes = append(notes, autotasktest.TicketNoteFixture())
+	}
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(notes...))
+	ctx := context.Background()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "autotask_search_ticket_notes",
+		Arguments: map[string]any{
+			"ticketId":   3001,
+			"maxResults": 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected wire error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected non-error result, got: %v", result)
+	}
+
+	resp := parseStructuredContent[services.CompactResponse](t, result)
+	if resp.Summary.Returned != 3 {
+		t.Errorf("expected 3 returned notes, got %d", resp.Summary.Returned)
+	}
+	if resp.Summary.HasMore {
+		t.Error("expected hasMore=false when exactly maxResults notes exist with none beyond")
+	}
+}
+
 // TestGetTicketNoteHandler_NotFound tests that a missing note returns an error result over wire.
 func TestGetTicketNoteHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
@@ -210,6 +285,77 @@ func TestCreateTicketNoteHandler_Success(t *testing.T) {
 	if !strings.Contains(titleStr, "Test note") {
 		t.Errorf("expected title to contain 'Test note', got %v", m["title"])
 	}
+}
+
+// TestSearchProjectNotesHandler_BoundedAndExactCount pins the bounded-fetch and
+// corrected hasMore semantics for the project-note handler. It shares the
+// collectBoundedChildRaw refactor exercised by the ticket-note tests; each handler
+// that uses it needs its own coverage so a per-handler regression cannot hide.
+func TestSearchProjectNotesHandler_BoundedAndExactCount(t *testing.T) {
+	seed := func(n int) []entities.ProjectNote {
+		notes := make([]entities.ProjectNote, 0, n)
+		for i := 0; i < n; i++ {
+			notes = append(notes, entities.ProjectNote{ID: autotask.Set(int64(4000 + i))})
+		}
+		return notes
+	}
+
+	// More notes than the limit: bounded to maxResults, hasMore true.
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(seed(5)...))
+	resp := callSearchNotes(t, cs, "autotask_search_project_notes", "projectId", 3)
+	if resp.Summary.Returned != 3 || !resp.Summary.HasMore {
+		t.Errorf("bounded: got Returned=%d HasMore=%v, want 3/true", resp.Summary.Returned, resp.Summary.HasMore)
+	}
+
+	// Exactly maxResults notes: hasMore must be false (no false positive).
+	cs2, _ := setupWireTest(t, autotasktest.WithEntity(seed(3)...))
+	resp2 := callSearchNotes(t, cs2, "autotask_search_project_notes", "projectId", 3)
+	if resp2.Summary.Returned != 3 || resp2.Summary.HasMore {
+		t.Errorf("exact count: got Returned=%d HasMore=%v, want 3/false", resp2.Summary.Returned, resp2.Summary.HasMore)
+	}
+}
+
+// TestSearchCompanyNotesHandler_BoundedAndExactCount pins the same for the company
+// note handler (the third site of the shared refactor).
+func TestSearchCompanyNotesHandler_BoundedAndExactCount(t *testing.T) {
+	seed := func(n int) []entities.CompanyNote {
+		notes := make([]entities.CompanyNote, 0, n)
+		for i := 0; i < n; i++ {
+			notes = append(notes, entities.CompanyNote{ID: autotask.Set(int64(5000 + i))})
+		}
+		return notes
+	}
+
+	cs, _ := setupWireTest(t, autotasktest.WithEntity(seed(5)...))
+	resp := callSearchNotes(t, cs, "autotask_search_company_notes", "companyId", 3)
+	if resp.Summary.Returned != 3 || !resp.Summary.HasMore {
+		t.Errorf("bounded: got Returned=%d HasMore=%v, want 3/true", resp.Summary.Returned, resp.Summary.HasMore)
+	}
+
+	cs2, _ := setupWireTest(t, autotasktest.WithEntity(seed(3)...))
+	resp2 := callSearchNotes(t, cs2, "autotask_search_company_notes", "companyId", 3)
+	if resp2.Summary.Returned != 3 || resp2.Summary.HasMore {
+		t.Errorf("exact count: got Returned=%d HasMore=%v, want 3/false", resp2.Summary.Returned, resp2.Summary.HasMore)
+	}
+}
+
+// callSearchNotes invokes a child-note search tool and returns its compact response.
+func callSearchNotes(t *testing.T, cs *mcp.ClientSession, tool, idField string, maxResults int) services.CompactResponse {
+	t.Helper()
+	result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: tool,
+		Arguments: map[string]any{
+			idField:      3001,
+			"maxResults": maxResults,
+		},
+	})
+	if err != nil {
+		t.Fatalf("%s: unexpected wire error: %v", tool, err)
+	}
+	if result.IsError {
+		t.Fatalf("%s: expected non-error result, got: %v", tool, result)
+	}
+	return parseStructuredContent[services.CompactResponse](t, result)
 }
 
 // TestGetProjectNoteHandler_NotFound tests that a missing project note returns an error result over wire.

@@ -82,7 +82,7 @@ func getBillingItemHandler(client *autotask.Client) func(ctx context.Context, re
 func searchBillingItemsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.CompanyID != 0 {
 			q.Where("companyID", autotask.OpEq, in.CompanyID)
@@ -128,7 +128,7 @@ func searchBillingItemsHandler(client *autotask.Client, mapper *services.Mapping
 func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.TimeEntryID != 0 {
 			q.Where("timeEntryID", autotask.OpEq, in.TimeEntryID)

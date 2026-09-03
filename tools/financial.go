@@ -249,7 +249,7 @@ func getQuoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp
 func searchQuotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.CompanyID != 0 {
 			q.Where("companyID", autotask.OpEq, in.CompanyID)
@@ -350,7 +350,7 @@ func getQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req 
 func searchQuoteItemsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuoteItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuoteItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.QuoteID != 0 {
 			q.Where("quoteID", autotask.OpEq, in.QuoteID)
@@ -536,7 +536,7 @@ func getOpportunityHandler(client *autotask.Client) func(ctx context.Context, re
 func searchOpportunitiesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchOpportunitiesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchOpportunitiesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.CompanyID != 0 {
 			q.Where("companyID", autotask.OpEq, in.CompanyID)
@@ -631,7 +631,7 @@ func createOpportunityHandler(client *autotask.Client) func(ctx context.Context,
 func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchInvoicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchInvoicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.CompanyID != 0 {
 			q.Where("companyID", autotask.OpEq, in.CompanyID)
@@ -665,7 +665,7 @@ func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, re
 func searchContractsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchContractsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchContractsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
 			q.Where("contractName", autotask.OpContains, in.SearchTerm)

@@ -187,12 +187,16 @@ func runHTTP(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 
 	mcpHandler := mcp.NewStreamableHTTPHandler(getServer, &mcp.StreamableHTTPOptions{
-		Logger:                logger,
-		CrossOriginProtection: &http.CrossOriginProtection{},
+		Logger: logger,
 	})
 
+	// Apply cross-origin protection as middleware. The StreamableHTTPOptions field
+	// is deprecated in favor of wrapping the handler. With no trusted origins
+	// configured, it rejects non-safe cross-origin browser requests.
+	protectedMCP := http.NewCrossOriginProtection().Handler(mcpHandler)
+
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", mcpHandler)
+	mux.Handle("/mcp", protectedMCP)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{

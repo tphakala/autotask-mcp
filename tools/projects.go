@@ -48,7 +48,7 @@ func searchProjectsHandler(client *autotask.Client, mapper *services.MappingCach
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
 
-		q := autotask.NewQuery().Limit(maxResults)
+		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
 			q.Where("projectName", autotask.OpContains, in.SearchTerm)

@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tphakala/autotask-mcp/services"
 	autotask "github.com/tphakala/go-autotask"
 	"github.com/tphakala/go-autotask/entities"
 )
@@ -89,19 +91,71 @@ func parseIDFromURI(uri string) (int64, error) {
 	return id, nil
 }
 
-// jsonResult wraps any value as a JSON ResourceContents.
+// jsonResult wraps any value as a JSON ResourceContents. Entity data is routed
+// through the same untrusted-content framing the tools apply (see frameUntrusted),
+// so customer-controlled free text read via a resource URI is bounded consistently.
 func jsonResult(uri string, v any) (*mcp.ReadResourceResult, error) {
-	data, err := json.MarshalIndent(v, "", "  ")
+	framed, err := frameUntrusted(v)
 	if err != nil {
+		return nil, fmt.Errorf("frame: %w", err)
+	}
+	// Encode with HTML escaping OFF so the untrusted-content boundary markers appear
+	// as literal "<untrusted_content>" rather than "<...". This matches the tool
+	// path (the SDK transport encodes tool output with SetEscapeHTML(false)); the
+	// default json.MarshalIndent would escape the markers and blunt the defense.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(framed); err != nil {
 		return nil, fmt.Errorf("marshal: %w", err)
 	}
 	return &mcp.ReadResourceResult{
 		Contents: []*mcp.ResourceContents{{
 			URI:      uri,
 			MIMEType: mimeTypeJSON,
-			Text:     string(data),
+			// Encoder.Encode appends a trailing newline; trim it to match the prior output.
+			Text: strings.TrimRight(buf.String(), "\n"),
 		}},
 	}, nil
+}
+
+// frameUntrusted converts a typed entity (or slice of entities) to its generic
+// JSON form and wraps customer-controlled free-text fields in untrusted-content
+// boundary markers. It mirrors the tools path, which marshals the same entities
+// to a map and calls services.FrameUntrustedMapFields, so resources and tools
+// present untrusted content identically.
+func frameUntrusted(v any) (any, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("frame marshal: %w", err)
+	}
+	// UseNumber keeps entity IDs and other integers as json.Number rather than
+	// float64, so large int64 IDs re-marshal exactly instead of losing precision
+	// or printing in scientific notation.
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	var decoded any
+	if err := dec.Decode(&decoded); err != nil {
+		return nil, fmt.Errorf("frame unmarshal: %w", err)
+	}
+	frameValue(decoded)
+	return decoded, nil
+}
+
+// frameValue applies field framing to each entity map reachable from v. A list
+// resource decodes to []any of maps; a get resource decodes to a single map.
+// Framing matches the tools path: top-level known fields only, no deeper
+// recursion, so the two surfaces stay consistent.
+func frameValue(v any) {
+	switch t := v.(type) {
+	case map[string]any:
+		services.FrameUntrustedMapFields(t)
+	case []any:
+		for _, item := range t {
+			frameValue(item)
+		}
+	}
 }
 
 // listCompaniesHandler returns a ResourceHandler that lists all companies.

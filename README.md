@@ -132,13 +132,15 @@ Configuration can be provided via environment variables or file configuration (`
 | `AUTOTASK_USERNAME` / `username` | (required) | Autotask API username |
 | `AUTOTASK_SECRET` / `secret` | (required) | Autotask API secret |
 | `AUTOTASK_INTEGRATION_CODE` / `integration_code` | (required) | Autotask integration code |
-| `AUTOTASK_API_URL` / `api_url` | auto-discovered | Override API base URL |
+| `AUTOTASK_API_URL` / `api_url` | auto-discovered | Override API base URL. In the config file, `api_url` must be an `https://` URL on an `autotask.net` host (or subdomain); an out-of-range value is ignored. A custom host (proxy or gateway) must be set through the `AUTOTASK_API_URL` environment variable, which is not restricted. |
 | `MCP_TRANSPORT` / `transport` | `stdio` | Transport: `stdio` or `http` |
 | `MCP_HTTP_PORT` / `http_port` | `8080` | HTTP server port |
 | `MCP_HTTP_HOST` / `http_host` | `0.0.0.0` | HTTP server bind address |
 | `AUTH_MODE` / `auth_mode` | `env` | Authentication mode: `env` or `gateway` |
 | `LOG_LEVEL` / `log_level` | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `LAZY_LOADING` / `lazy_loading` | `false` | Enable progressive tool discovery and proxying |
+
+The config file holds credentials, so it must not be readable by other users. The server refuses to load a `config.json` with group- or world-accessible permissions (anything looser than `0600`) and prints the `chmod 600` command to fix it. The `autotask-mcp config` CLI always writes the file as `0600`.
 
 ## Available Tools
 

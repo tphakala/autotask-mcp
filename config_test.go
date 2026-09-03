@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -153,6 +155,9 @@ func TestLoadConfig_EnvOverridesFile(t *testing.T) {
 }
 
 func TestSaveFileConfig_Permissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits are not enforced on Windows")
+	}
 	tempDir := t.TempDir()
 	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
 
@@ -277,5 +282,183 @@ func TestGetConfigField_UnsetPointerKeys(t *testing.T) {
 	fc.HTTPPort = &port
 	if val, err := getConfigField(fc, "http_port"); err != nil || val != "9090" {
 		t.Errorf("getConfigField(http_port) set: got %q, err %v; want 9090", val, err)
+	}
+}
+
+// TestValidateFileAPIURL pins the api_url allowlist: https to an autotask.net host
+// (or subdomain) is accepted; everything else is rejected, so a tampered config
+// file cannot redirect credential-bearing requests to an arbitrary endpoint.
+func TestValidateFileAPIURL(t *testing.T) {
+	valid := []string{
+		"https://autotask.net",
+		"https://webservices19.autotask.net/ATServicesRest",
+		"https://WEBSERVICES2.AUTOTASK.NET/ATServicesRest",
+	}
+	for _, u := range valid {
+		if err := validateFileAPIURL(u); err != nil {
+			t.Errorf("validateFileAPIURL(%q): unexpected error %v", u, err)
+		}
+	}
+
+	invalid := []string{
+		"http://webservices19.autotask.net/ATServicesRest", // not https
+		"https://evil.example.com",                         // wrong host
+		"https://evil-autotask.net",                        // look-alike, no dot boundary
+		"https://autotask.net.evil.com",                    // suffix trick
+		"ftp://webservices19.autotask.net",                 // wrong scheme
+		"not a url at all",                                 // unparseable as an absolute https URL
+		"https://",                                         // no host
+	}
+	for _, u := range invalid {
+		if err := validateFileAPIURL(u); err == nil {
+			t.Errorf("validateFileAPIURL(%q): expected error, got nil", u)
+		}
+	}
+
+	// The reject-path error must not echo an embedded password: the message is
+	// printed to stderr, so a misconfigured URL with userinfo would leak it. Use an
+	// http scheme so this hits the scheme branch, which echoes the (redacted) URL.
+	err := validateFileAPIURL("http://apiuser:sup3rs3cret@webservices19.autotask.net")
+	if err == nil {
+		t.Fatal("expected error for an http api_url with userinfo")
+	}
+	if strings.Contains(err.Error(), "sup3rs3cret") {
+		t.Errorf("error message leaked the api_url password: %q", err.Error())
+	}
+}
+
+// TestLoadFileConfig_RefusesInsecurePerms verifies a group/world-accessible config
+// file is refused (fail closed) rather than loaded, so credentials are never read
+// from a file other users can access. Unix-only: Windows synthesizes perm bits.
+func TestLoadFileConfig_RefusesInsecurePerms(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits are not enforced on Windows")
+	}
+	tempDir := t.TempDir()
+	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
+	if err := saveFileConfig(cfgPath, FileConfig{Username: "u"}); err != nil {
+		t.Fatalf("saveFileConfig: %v", err)
+	}
+	if err := os.Chmod(cfgPath, 0644); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+
+	fc, loaded, err := loadFileConfig(cfgPath)
+	if err == nil {
+		t.Error("expected error for group/world-readable config file")
+	}
+	if loaded {
+		t.Error("expected loaded=false when refusing an insecure config file")
+	}
+	if fc.Username != "" {
+		t.Errorf("expected no values from a refused config, got username %q", fc.Username)
+	}
+}
+
+// TestLoadConfig_IgnoresBadFileAPIURL verifies the server config path drops a bad
+// file api_url (so it cannot redirect credentials) while keeping the rest of the
+// file, and never blocks startup. The config CLI can still read/repair such a file
+// because validation lives on the server path, not in loadFileConfig.
+func TestLoadConfig_IgnoresBadFileAPIURL(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tempDir)
+	clearAllConfigEnv(t)
+
+	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
+	if err := saveFileConfig(cfgPath, FileConfig{Username: "fileuser", APIURL: "http://evil.example.com"}); err != nil {
+		t.Fatalf("saveFileConfig: %v", err)
+	}
+
+	cfg := loadConfig()
+	if cfg.APIURL != "" {
+		t.Errorf("expected bad file api_url to be ignored, got %q", cfg.APIURL)
+	}
+	if cfg.Username != "fileuser" {
+		t.Errorf("expected the rest of the file to still load, got username %q", cfg.Username)
+	}
+
+	// loadFileConfig itself no longer validates api_url, so the CLI can read it back.
+	fc, loaded, err := loadFileConfig(cfgPath)
+	if err != nil || !loaded {
+		t.Fatalf("loadFileConfig should read a file with a bad api_url for CLI repair: err=%v loaded=%v", err, loaded)
+	}
+	if fc.APIURL != "http://evil.example.com" {
+		t.Errorf("loadFileConfig should return the raw stored api_url, got %q", fc.APIURL)
+	}
+}
+
+// TestSetConfigField_ValidatesAPIURL verifies api_url is validated on write, so the
+// CLI cannot persist a value the server would refuse; an empty value clears it.
+func TestSetConfigField_ValidatesAPIURL(t *testing.T) {
+	var fc FileConfig
+	if err := setConfigField(&fc, "api_url", "http://evil.example.com"); err == nil {
+		t.Error("expected error setting a non-autotask.net api_url")
+	}
+	if fc.APIURL != "" {
+		t.Errorf("bad api_url must not be stored, got %q", fc.APIURL)
+	}
+	const good = "https://webservices19.autotask.net/ATServicesRest"
+	if err := setConfigField(&fc, "api_url", good); err != nil {
+		t.Errorf("valid api_url rejected: %v", err)
+	}
+	if fc.APIURL != good {
+		t.Errorf("api_url = %q, want %q", fc.APIURL, good)
+	}
+	if err := setConfigField(&fc, "api_url", ""); err != nil {
+		t.Errorf("clearing api_url should succeed: %v", err)
+	}
+	if fc.APIURL != "" {
+		t.Errorf("api_url should be cleared, got %q", fc.APIURL)
+	}
+}
+
+// TestLoadFileConfig_AcceptsValidAPIURL verifies a legitimate https autotask.net
+// api_url loads normally.
+func TestLoadFileConfig_AcceptsValidAPIURL(t *testing.T) {
+	tempDir := t.TempDir()
+	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
+	const apiURL = "https://webservices19.autotask.net/ATServicesRest"
+	if err := saveFileConfig(cfgPath, FileConfig{Username: "u", APIURL: apiURL}); err != nil {
+		t.Fatalf("saveFileConfig: %v", err)
+	}
+
+	fc, loaded, err := loadFileConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !loaded {
+		t.Error("expected loaded=true for a valid config file")
+	}
+	if fc.APIURL != apiURL {
+		t.Errorf("api_url = %q, want %q", fc.APIURL, apiURL)
+	}
+}
+
+// TestSaveFileConfig_TightensDirPermissions verifies saveFileConfig tightens an
+// already-more-permissive config directory to 0700, since MkdirAll does not.
+func TestSaveFileConfig_TightensDirPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits are not enforced on Windows")
+	}
+	tempDir := t.TempDir()
+	dir := filepath.Join(tempDir, "autotask-mcp")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.Chmod(dir, 0777); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+
+	cfgPath := filepath.Join(dir, "config.json")
+	if err := saveFileConfig(cfgPath, FileConfig{Username: "u"}); err != nil {
+		t.Fatalf("saveFileConfig: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat dir: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0700 {
+		t.Errorf("config dir permissions = %#o, want 0700", perm)
 	}
 }

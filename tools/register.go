@@ -3,7 +3,9 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"iter"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -64,6 +66,9 @@ func entityToMap(entity any) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("entityToMap: marshal: %w", err)
 	}
+	// Numbers decode to float64 here (not json.Number) on purpose: the returned map
+	// is consumed by the enhancement pipeline, which type-asserts numeric fields as
+	// float64. Autotask entity IDs stay well within float64's exact-integer range.
 	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("entityToMap: unmarshal: %w", err)
@@ -132,15 +137,35 @@ type RouterOut struct {
 	Description   string `json:"description" jsonschema:"Guidance or tool description"`
 }
 
+// autotaskMaxRecords mirrors go-autotask's maxRecordsLimit: the largest MaxRecords a
+// single query page will request. go-autotask still paginates up to the query's raw
+// Limit, so the maxResults+1 over-fetch usually distinguishes "more exist" even at
+// this ceiling; but a server that returned a full ceiling page with no next-page link
+// could hide the extra record, so searchResult keeps a conservative fallback there.
+const autotaskMaxRecords = 500
+
 // searchResult builds a compact formatted search result with enhancement.
+//
+// Callers over-fetch one record (Limit(maxResults+1)) so hasMore reflects whether a
+// genuine further record exists rather than the old "a full page came back" guess.
+// The extra record is trimmed before enhancement and formatting. At maxResults equal
+// to the ceiling (autotaskMaxRecords) a full page is reported as hasMore=true
+// conservatively, since the over-fetch cannot be guaranteed to exceed the ceiling.
 func searchResult(ctx context.Context, mapper *services.MappingCache, items []map[string]any, toolName string, maxResults int) (*mcp.CallToolResult, services.CompactResponse, error) {
+	hasMore := len(items) > maxResults
+	if hasMore {
+		items = items[:maxResults]
+	} else if len(items) == maxResults && maxResults >= autotaskMaxRecords {
+		hasMore = true
+	}
+
 	if mapper != nil {
 		mapper.EnhanceItems(ctx, items)
 	}
 
 	entityType := services.DetectEntityType(toolName)
 	opts := services.FormatOptions{MaxResults: maxResults}
-	compact := services.FormatCompactResponse(items, entityType, opts)
+	compact := services.FormatCompactResponse(items, entityType, opts, hasMore)
 
 	return nil, compact, nil
 }
@@ -154,6 +179,38 @@ func emptySearchResult() (*mcp.CallToolResult, services.CompactResponse, error) 
 		},
 		Items: []map[string]any{},
 	}, nil
+}
+
+// collectBoundedChildRaw ranges a raw child-entity iterator and collects at most
+// limit items, plus a single peek used only to decide hasMore. Breaking out of a
+// range over an iter.Seq2 signals the producer to stop, so the underlying paginator
+// halts instead of fetching every page of a large child collection (ticket
+// attachments carry a base64 blob on every row). It still fetches whole pages, so
+// this bounds the number of pages fetched, not the size of the first page.
+//
+// A NotFound parent is reported as an empty result (no rows, no error), matching
+// the search handlers' "no such parent means no notes/attachments" behavior.
+//
+// Callers pass limit >= 1 (from defaultMaxResults). A limit < 1 collects nothing
+// and reports hasMore whenever any row exists.
+func collectBoundedChildRaw(seq iter.Seq2[map[string]any, error], limit int) (items []map[string]any, hasMore bool, err error) {
+	items = make([]map[string]any, 0, max(limit, 0))
+	for m, iterErr := range seq {
+		if iterErr != nil {
+			var notFound *autotask.NotFoundError
+			if errors.As(iterErr, &notFound) {
+				return nil, false, nil
+			}
+			return nil, false, iterErr
+		}
+		if len(items) >= limit {
+			// One item beyond the limit proves more match; stop paginating.
+			hasMore = true
+			break
+		}
+		items = append(items, m)
+	}
+	return items, hasMore, nil
 }
 
 // defaultMaxResults returns the effective max results limit clamped to [1, maxVal].
