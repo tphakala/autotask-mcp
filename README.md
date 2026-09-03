@@ -139,6 +139,7 @@ Configuration can be provided via environment variables or file configuration (`
 | `AUTH_MODE` / `auth_mode` | `env` | Authentication mode: `env` or `gateway` |
 | `LOG_LEVEL` / `log_level` | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `LAZY_LOADING` / `lazy_loading` | `false` | Enable progressive tool discovery and proxying |
+| `AUTOTASK_GATEWAY_CLIENT_CACHE_SIZE` / `gateway_client_cache_size` | `128` | Gateway mode only: max number of cached per-tenant Autotask clients (LRU). Must be a positive integer |
 
 The config file holds credentials, so it must not be readable by other users. The server refuses to load a `config.json` with group- or world-accessible permissions (anything looser than `0600`) and prints the `chmod 600` command to fix it. The `autotask-mcp config` CLI always writes the file as `0600`.
 

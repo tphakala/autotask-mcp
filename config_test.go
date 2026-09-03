@@ -22,6 +22,7 @@ func clearAllConfigEnv(t *testing.T) {
 		"LOG_LEVEL",
 		"AUTH_MODE",
 		"LAZY_LOADING",
+		"AUTOTASK_GATEWAY_CLIENT_CACHE_SIZE",
 	}
 	for _, k := range keys {
 		t.Setenv(k, "")
@@ -46,6 +47,38 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	}
 	if cfg.AuthMode != "env" {
 		t.Errorf("default auth mode = %q, want env", cfg.AuthMode)
+	}
+	if cfg.GatewayClientCacheSize != defaultGatewayClientCacheSize {
+		t.Errorf("default gateway client cache size = %d, want %d", cfg.GatewayClientCacheSize, defaultGatewayClientCacheSize)
+	}
+}
+
+func TestLoadConfig_GatewayClientCacheSize(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		want int
+	}{
+		{"valid override", "32", 32},
+		{"zero ignored", "0", defaultGatewayClientCacheSize},
+		{"negative ignored", "-5", defaultGatewayClientCacheSize},
+		{"unparseable ignored", "abc", defaultGatewayClientCacheSize},
+		{"empty keeps default", "", defaultGatewayClientCacheSize},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			t.Setenv("XDG_CONFIG_HOME", tempDir)
+			clearAllConfigEnv(t)
+			if tc.env != "" {
+				t.Setenv("AUTOTASK_GATEWAY_CLIENT_CACHE_SIZE", tc.env)
+			}
+
+			cfg := loadConfig()
+			if cfg.GatewayClientCacheSize != tc.want {
+				t.Errorf("GatewayClientCacheSize = %d, want %d", cfg.GatewayClientCacheSize, tc.want)
+			}
+		})
 	}
 }
 
@@ -151,6 +184,64 @@ func TestLoadConfig_EnvOverridesFile(t *testing.T) {
 	}
 	if cfg.Secret != "filesecret" {
 		t.Errorf("secret = %q, want filesecret (from file)", cfg.Secret)
+	}
+}
+
+func TestLoadConfig_GatewayClientCacheSizeFile(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tempDir)
+	clearAllConfigEnv(t)
+
+	size := 42
+	fc := FileConfig{Username: "u", GatewayClientCacheSize: &size}
+	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
+	if err := saveFileConfig(cfgPath, fc); err != nil {
+		t.Fatalf("saveFileConfig: %v", err)
+	}
+
+	// The file value is honored.
+	if cfg := loadConfig(); cfg.GatewayClientCacheSize != 42 {
+		t.Errorf("GatewayClientCacheSize from file = %d, want 42", cfg.GatewayClientCacheSize)
+	}
+
+	// Env overrides the file value, matching every other setting's precedence.
+	t.Setenv("AUTOTASK_GATEWAY_CLIENT_CACHE_SIZE", "7")
+	if cfg := loadConfig(); cfg.GatewayClientCacheSize != 7 {
+		t.Errorf("GatewayClientCacheSize with env override = %d, want 7", cfg.GatewayClientCacheSize)
+	}
+}
+
+func TestSetGetConfigField_GatewayClientCacheSize(t *testing.T) {
+	var fc FileConfig
+	// Unset returns empty like every other pointer-backed key.
+	if val, err := getConfigField(fc, "gateway_client_cache_size"); err != nil || val != "" {
+		t.Errorf("unset gateway_client_cache_size: got %q err %v, want empty", val, err)
+	}
+	// A valid value round-trips through set then get.
+	if err := setConfigField(&fc, "gateway_client_cache_size", "64"); err != nil {
+		t.Fatalf("setConfigField: %v", err)
+	}
+	if fc.GatewayClientCacheSize == nil || *fc.GatewayClientCacheSize != 64 {
+		t.Fatalf("GatewayClientCacheSize = %v, want 64", fc.GatewayClientCacheSize)
+	}
+	if val, err := getConfigField(fc, "gateway_client_cache_size"); err != nil || val != "64" {
+		t.Errorf("get after set: got %q err %v, want 64", val, err)
+	}
+	// Non-positive and unparseable values are rejected without mutating the field.
+	for _, bad := range []string{"0", "-1", "abc"} {
+		if err := setConfigField(&fc, "gateway_client_cache_size", bad); err == nil {
+			t.Errorf("setConfigField(%q) should have returned an error", bad)
+		}
+	}
+	if fc.GatewayClientCacheSize == nil || *fc.GatewayClientCacheSize != 64 {
+		t.Errorf("a rejected value must leave the field unchanged, got %v", fc.GatewayClientCacheSize)
+	}
+	// An empty value clears the field.
+	if err := setConfigField(&fc, "gateway_client_cache_size", ""); err != nil {
+		t.Fatalf("setConfigField clear: %v", err)
+	}
+	if fc.GatewayClientCacheSize != nil {
+		t.Errorf("GatewayClientCacheSize after clear = %v, want nil", fc.GatewayClientCacheSize)
 	}
 }
 
