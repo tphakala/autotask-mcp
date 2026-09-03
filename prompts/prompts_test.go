@@ -126,6 +126,9 @@ func TestGetPrompt_TriageByDescription(t *testing.T) {
 	if !strings.Contains(text, "autotask_search_tickets") {
 		t.Errorf("triage-by-description should point at autotask_search_tickets; got:\n%s", text)
 	}
+	if !strings.Contains(text, "ticketNumber") {
+		t.Errorf("triage-by-description should note the ticketNumber-prefix search limitation; got:\n%s", text)
+	}
 }
 
 func TestGetPrompt_TriageRequiresOneArgument(t *testing.T) {
@@ -181,10 +184,14 @@ func TestGetPrompt_DraftTimeEntryEmbedsAllInputs(t *testing.T) {
 		t.Fatalf("GetPrompt: %v", err)
 	}
 	text := promptText(t, res)
-	for _, want := range []string{"5150", "2.5", "Replaced faulty switch and verified uplinks", "autotask_search_resources", "autotask_create_time_entry"} {
+	for _, want := range []string{"5150", "2.5", "Replaced faulty switch and verified uplinks", "autotask_search_resources", "autotask_create_time_entry", "dateWorked", "summaryNotes", "billingCodeID"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("draft time entry text missing %q; got:\n%s", want, text)
 		}
+	}
+	// The tool has no roleID field; the guidance must not invent one.
+	if strings.Contains(text, "roleID") {
+		t.Errorf("draft time entry must not reference a non-existent roleID; got:\n%s", text)
 	}
 }
 
@@ -213,10 +220,27 @@ func TestGetPrompt_WeeklyTimesheetEmbedsRange(t *testing.T) {
 		t.Fatalf("GetPrompt: %v", err)
 	}
 	text := promptText(t, res)
-	for _, want := range []string{"312", "2026-08-24", "2026-08-30", "autotask_search_time_entries"} {
+	for _, want := range []string{"312", "2026-08-24", "2026-08-30", "autotask_search_time_entries", "dateWorkedAfter", "dateWorkedBefore"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("weekly timesheet text missing %q; got:\n%s", want, text)
 		}
+	}
+}
+
+// TestPrompts_LazyModeRoutingHint guards that the guidance tells the model how to
+// reach a named tool when the server is in lazy-loading mode (only meta-tools
+// registered), via autotask_execute_tool.
+func TestPrompts_LazyModeRoutingHint(t *testing.T) {
+	cs := setupPromptTest(t)
+	res, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name:      "autotask_summarize_ticket",
+		Arguments: map[string]string{"ticketId": "1"},
+	})
+	if err != nil {
+		t.Fatalf("GetPrompt: %v", err)
+	}
+	if text := promptText(t, res); !strings.Contains(text, "autotask_execute_tool") {
+		t.Errorf("expected lazy-mode routing hint via autotask_execute_tool; got:\n%s", text)
 	}
 }
 
