@@ -32,9 +32,18 @@ type Config struct {
 	AuthMode    string // "env" or "gateway"
 	LazyLoading bool
 
+	// GatewayClientCacheSize bounds the number of live per-tenant autotask clients
+	// (with their warm metadata caches) kept in gateway auth mode. It is ignored in
+	// env auth mode, which uses a single shared client.
+	GatewayClientCacheSize int
+
 	// ConfigFile source path (if loaded from file)
 	ConfigFile string
 }
+
+// defaultGatewayClientCacheSize is the default LRU bound on per-tenant clients in
+// gateway auth mode. Override with AUTOTASK_GATEWAY_CLIENT_CACHE_SIZE.
+const defaultGatewayClientCacheSize = 128
 
 // FileConfig defines the JSON structure for the on-disk config file (~/.config/autotask-mcp/config.json).
 type FileConfig struct {
@@ -49,6 +58,8 @@ type FileConfig struct {
 	LogLevel        string `json:"log_level,omitempty"`
 	AuthMode        string `json:"auth_mode,omitempty"`
 	LazyLoading     *bool  `json:"lazy_loading,omitempty"`
+
+	GatewayClientCacheSize *int `json:"gateway_client_cache_size,omitempty"`
 }
 
 // defaultConfigPath returns the standard XDG path for the config file.
@@ -227,13 +238,14 @@ func loadConfig() Config {
 	}
 
 	cfg := Config{
-		ServerName:  "autotask-mcp",
-		Transport:   "stdio",
-		HTTPHost:    "0.0.0.0",
-		HTTPPort:    8080,
-		LogLevel:    "info",
-		AuthMode:    "env",
-		LazyLoading: false,
+		ServerName:             "autotask-mcp",
+		Transport:              "stdio",
+		HTTPHost:               "0.0.0.0",
+		HTTPPort:               8080,
+		LogLevel:               "info",
+		AuthMode:               "env",
+		LazyLoading:            false,
+		GatewayClientCacheSize: defaultGatewayClientCacheSize,
 	}
 	if loaded {
 		cfg.ConfigFile = cfgPath
@@ -278,6 +290,9 @@ func applyFileConfig(cfg *Config, fileCfg FileConfig) {
 	if fileCfg.LazyLoading != nil {
 		cfg.LazyLoading = *fileCfg.LazyLoading
 	}
+	if fileCfg.GatewayClientCacheSize != nil && *fileCfg.GatewayClientCacheSize > 0 {
+		cfg.GatewayClientCacheSize = *fileCfg.GatewayClientCacheSize
+	}
 }
 
 func applyEnvOverrides(cfg *Config) {
@@ -315,6 +330,13 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("LAZY_LOADING"); v != "" {
 		cfg.LazyLoading = strings.ToLower(v) == "true" || v == "1"
+	}
+	if v := os.Getenv("AUTOTASK_GATEWAY_CLIENT_CACHE_SIZE"); v != "" {
+		// Only a positive size overrides the default; a zero, negative, or
+		// unparseable value is ignored so the cache stays bounded.
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.GatewayClientCacheSize = n
+		}
 	}
 }
 
@@ -415,6 +437,11 @@ func getConfigField(fc FileConfig, key string) (string, error) {
 		fields["lazy_loading"] = strconv.FormatBool(*fc.LazyLoading)
 		fields["lazyloading"] = strconv.FormatBool(*fc.LazyLoading)
 	}
+	fields["gateway_client_cache_size"], fields["gatewayclientcachesize"] = "", ""
+	if fc.GatewayClientCacheSize != nil {
+		fields["gateway_client_cache_size"] = strconv.Itoa(*fc.GatewayClientCacheSize)
+		fields["gatewayclientcachesize"] = strconv.Itoa(*fc.GatewayClientCacheSize)
+	}
 
 	val, ok := fields[strings.ToLower(key)]
 	if !ok {
@@ -484,6 +511,16 @@ func setConfigField(fc *FileConfig, key, val string) error {
 			return fmt.Errorf("invalid port %q: must be integer between 1 and 65535", val)
 		}
 		fc.HTTPPort = &p
+	case "gateway_client_cache_size", "gatewayclientcachesize":
+		if val == "" {
+			fc.GatewayClientCacheSize = nil
+			return nil
+		}
+		n, err := strconv.Atoi(val)
+		if err != nil || n <= 0 {
+			return fmt.Errorf("invalid gateway client cache size %q: must be a positive integer", val)
+		}
+		fc.GatewayClientCacheSize = &n
 	case "lazy_loading", "lazyloading":
 		if val == "" {
 			fc.LazyLoading = nil
