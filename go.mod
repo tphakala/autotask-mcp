@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.7.0
-	github.com/tphakala/go-autotask v1.4.4
+	github.com/tphakala/go-autotask v1.5.0
 )
 
 require (

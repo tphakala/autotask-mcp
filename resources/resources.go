@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	mimeTypeJSON        = "application/json"
+	mimeTypeJSON         = "application/json"
 	defaultResourceLimit = 50
 	statusCompleted      = 5
 )
