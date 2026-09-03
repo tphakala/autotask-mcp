@@ -78,20 +78,21 @@ func hasInsecurePerm(perm os.FileMode) bool {
 // comes from the trusted process environment and is the escape hatch for proxy or
 // gateway deployments that front Autotask on a non-autotask.net host.
 //
-// Error messages never echo the raw value verbatim: a misconfigured api_url can
-// embed userinfo credentials (https://user:pass@host), and the error is printed to
-// stderr. url.Redacted() masks any password; the host branch echoes only the host.
+// Error messages never echo URL userinfo: a misconfigured api_url can embed
+// credentials (https://user:pass@host), and the error is printed to stderr.
+// url.Redacted() masks only the password (it preserves the username), so the reject
+// paths echo only non-sensitive parts: the scheme, or the parsed host.
 func validateFileAPIURL(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("api_url is not a valid URL")
 	}
 	if u.Scheme != "https" {
-		return fmt.Errorf("api_url %q must use https", u.Redacted())
+		return fmt.Errorf("api_url must use https, got scheme %q", u.Scheme)
 	}
 	host := strings.ToLower(u.Hostname())
 	if host == "" {
-		return fmt.Errorf("api_url %q has no host", u.Redacted())
+		return fmt.Errorf("api_url has no host")
 	}
 	// Match the domain itself or any subdomain, but not look-alikes such as
 	// "evil-autotask.net" or "autotask.net.evil.com" (the leading dot is required).

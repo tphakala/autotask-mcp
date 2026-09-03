@@ -315,15 +315,18 @@ func TestValidateFileAPIURL(t *testing.T) {
 		}
 	}
 
-	// The reject-path error must not echo an embedded password: the message is
-	// printed to stderr, so a misconfigured URL with userinfo would leak it. Use an
-	// http scheme so this hits the scheme branch, which echoes the (redacted) URL.
-	err := validateFileAPIURL("http://apiuser:sup3rs3cret@webservices19.autotask.net")
+	// The reject-path error must not echo URL userinfo (neither the password nor the
+	// username): the message is printed to stderr. Use an http scheme so this hits the
+	// scheme branch.
+	err := validateFileAPIURL("http://secretuser:sup3rs3cret@webservices19.autotask.net")
 	if err == nil {
 		t.Fatal("expected error for an http api_url with userinfo")
 	}
 	if strings.Contains(err.Error(), "sup3rs3cret") {
 		t.Errorf("error message leaked the api_url password: %q", err.Error())
+	}
+	if strings.Contains(err.Error(), "secretuser") {
+		t.Errorf("error message leaked the api_url username: %q", err.Error())
 	}
 }
 

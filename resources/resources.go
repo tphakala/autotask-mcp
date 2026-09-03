@@ -145,8 +145,9 @@ func frameUntrusted(v any) (any, error) {
 
 // frameValue applies field framing to each entity map reachable from v. A list
 // resource decodes to []any of maps; a get resource decodes to a single map.
-// Framing matches the tools path: top-level known fields only, no deeper
-// recursion, so the two surfaces stay consistent.
+// Framing matches the tools path exactly: services.FrameUntrustedMapFields frames
+// the known top-level string fields plus userDefinedFields values, so the two
+// surfaces stay consistent.
 func frameValue(v any) {
 	switch t := v.(type) {
 	case map[string]any:
