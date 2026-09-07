@@ -1,0 +1,7 @@
+version: "2"
+
+# golangci-lint v2 configuration (pinned to v2.13.2 in CI).
+# Uses the standard default linter set; add entries under linters.enable
+# to opt into more checks as the codebase warrants.
+linters:
+  default: standard
