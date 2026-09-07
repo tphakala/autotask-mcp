@@ -10,7 +10,7 @@ import (
 	"syscall"
 )
 
-const version = "1.1.0"
+const version = "1.2.0"
 
 func printUsage() {
 	fmt.Printf("autotask-mcp v%s - Model Context Protocol server for Autotask PSA\n\n", version)
