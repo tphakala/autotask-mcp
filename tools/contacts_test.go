@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -23,7 +22,7 @@ func TestRegisterContactTools_NoPanic(t *testing.T) {
 // TestSearchContactsHandler_ReturnsNoContactsFound tests the empty-result case over wire.
 func TestSearchContactsHandler_ReturnsNoContactsFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_contacts",
@@ -49,7 +48,7 @@ func TestSearchContactsHandler_ReturnsNoContactsFound(t *testing.T) {
 func TestSearchContactsHandler_ReturnsContacts(t *testing.T) {
 	contact := autotasktest.ContactFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(contact))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_contacts",
@@ -77,7 +76,7 @@ func TestSearchContactsHandler_ReturnsContacts(t *testing.T) {
 // TestCreateContactHandler_Success tests creating a contact over wire.
 func TestCreateContactHandler_Success(t *testing.T) {
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.ContactFixture()))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_contact",
@@ -107,7 +106,7 @@ func TestCreateContactHandler_Success(t *testing.T) {
 func TestSearchContactsHandler_WithFilters(t *testing.T) {
 	contact := autotasktest.ContactFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(contact))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	active := 1
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{

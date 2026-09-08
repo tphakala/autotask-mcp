@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -30,7 +29,7 @@ func TestListQueuesHandler_ReturnsResult(t *testing.T) {
 			nil,
 		),
 	)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_list_queues",
@@ -59,7 +58,7 @@ func TestListTicketStatusesHandler_ReturnsResult(t *testing.T) {
 			nil,
 		),
 	)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_list_ticket_statuses",
@@ -88,7 +87,7 @@ func TestListTicketPrioritiesHandler_ReturnsResult(t *testing.T) {
 			nil,
 		),
 	)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_list_ticket_priorities",
@@ -118,7 +117,7 @@ func TestGetFieldInfoHandler_AllFields(t *testing.T) {
 			nil,
 		),
 	)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_field_info",
@@ -151,7 +150,7 @@ func TestGetFieldInfoHandler_SpecificField(t *testing.T) {
 			nil,
 		),
 	)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_field_info",
@@ -185,7 +184,7 @@ func TestGetFieldInfoHandler_NotFoundField(t *testing.T) {
 			nil,
 		),
 	)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_field_info",

@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -23,7 +22,7 @@ func TestRegisterTaskTools_NoPanic(t *testing.T) {
 // TestSearchTasksHandler_ReturnsNoTasksFound tests the empty-result case over wire.
 func TestSearchTasksHandler_ReturnsNoTasksFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_tasks",
@@ -49,7 +48,7 @@ func TestSearchTasksHandler_ReturnsNoTasksFound(t *testing.T) {
 func TestSearchTasksHandler_ReturnsTasks(t *testing.T) {
 	task := autotasktest.TaskFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(task))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_tasks",
@@ -84,7 +83,7 @@ func TestCreateTaskHandler_Success(t *testing.T) {
 		t.Fatal("fixture project has no ID")
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(proj))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_task",
@@ -113,7 +112,7 @@ func TestCreateTaskHandler_Success(t *testing.T) {
 func TestSearchTasksHandler_WithFilters(t *testing.T) {
 	task := autotasktest.TaskFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(task))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_tasks",

@@ -2,7 +2,7 @@ package tools
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -37,22 +37,28 @@ type SearchBillingItemApprovalLevelsInput struct {
 	MaxResults         int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
+const (
+	toolGetBillingItem                  = "autotask_get_billing_item"
+	toolSearchBillingItems              = "autotask_search_billing_items"
+	toolSearchBillingItemApprovalLevels = "autotask_search_billing_item_approval_levels"
+)
+
 // RegisterBillingTools registers all billing-related MCP tools with the server.
 func RegisterBillingTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_billing_item",
+		Name:        toolGetBillingItem,
 		Description: "Retrieve one billing item by its numeric billingItemId, returning its full field set. Use this to fetch a single known item; to find items by company, ticket, project, contract, invoice, or posted-date range use autotask_search_billing_items instead. Read-only.",
 		Annotations: readOnlyTool("Get billing item"),
 	}, getBillingItemHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_billing_items",
+		Name:        toolSearchBillingItems,
 		Description: "Find billing items by company, ticket, project, contract, invoice, or posted-date range, returning a compact summary of matching records (up to maxResults, default 25, max 500). Use this to locate billing items, then autotask_get_billing_item for the full field set of one item. Read-only.",
 		Annotations: readOnlyTool("Search billing items"),
 	}, searchBillingItemsHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_billing_item_approval_levels",
+		Name:        toolSearchBillingItemApprovalLevels,
 		Description: "Find billing-item approval-level records by time entry, approving resource, approval level, or approved-date range, returning a compact summary of matching records (up to maxResults, default 25, max 500). Read-only.",
 		Annotations: readOnlyTool("Search billing item approval levels"),
 	}, searchBillingItemApprovalLevelsHandler(client))
@@ -62,7 +68,7 @@ func RegisterBillingTools(s *mcp.Server, client *autotask.Client, mapper *servic
 func getBillingItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in GetBillingItemInput) (*mcp.CallToolResult, map[string]any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in GetBillingItemInput) (*mcp.CallToolResult, map[string]any, error) {
 		if in.BillingItemID == 0 {
-			return nil, nil, fmt.Errorf("billingItemId is required")
+			return nil, nil, errors.New("billingItemId is required")
 		}
 		item, err := autotask.Get[entities.BillingItem](ctx, client, in.BillingItemID)
 		if err != nil {
@@ -81,7 +87,7 @@ func getBillingItemHandler(client *autotask.Client) func(ctx context.Context, re
 // searchBillingItemsHandler returns a handler that searches billing items.
 func searchBillingItemsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.CompanyID != 0 {
@@ -120,14 +126,14 @@ func searchBillingItemsHandler(client *autotask.Client, mapper *services.Mapping
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_billing_items", maxResults)
+		return searchResult(ctx, mapper, maps, toolSearchBillingItems, maxResults)
 	}
 }
 
 // searchBillingItemApprovalLevelsHandler returns a handler that searches billing item approval levels.
 func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchBillingItemApprovalLevelsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.TimeEntryID != 0 {
@@ -160,6 +166,6 @@ func searchBillingItemApprovalLevelsHandler(client *autotask.Client) func(ctx co
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_billing_item_approval_levels", maxResults)
+		return searchResult(ctx, nil, maps, toolSearchBillingItemApprovalLevels, maxResults)
 	}
 }

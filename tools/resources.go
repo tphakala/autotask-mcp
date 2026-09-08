@@ -17,10 +17,12 @@ type SearchResourcesInput struct {
 	MaxResults   int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
+const toolSearchResources = "autotask_search_resources"
+
 // RegisterResourceTools registers all resource-related MCP tools with the server.
 func RegisterResourceTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_resources",
+		Name:        toolSearchResources,
 		Description: "Find internal staff (employees, contractors, or temporary workers) of the Autotask account by name or email substring, active status, and resource type, returning a compact summary of matching records (up to maxResults, default 25, max 500). Resources are the people assigned to tickets and tasks; for client-side people at a company use autotask_search_contacts instead. Use the returned resource ID as assignedResourceID when creating or updating tickets. Read-only.",
 		Annotations: readOnlyTool("Search resources"),
 	}, searchResourcesHandler(client))
@@ -29,7 +31,7 @@ func RegisterResourceTools(s *mcp.Server, client *autotask.Client) {
 // searchResourcesHandler returns a handler that searches resources using the provided filters.
 func searchResourcesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchResourcesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchResourcesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
@@ -61,6 +63,6 @@ func searchResourcesHandler(client *autotask.Client) func(ctx context.Context, r
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_resources", maxResults)
+		return searchResult(ctx, nil, maps, toolSearchResources, maxResults)
 	}
 }

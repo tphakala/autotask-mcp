@@ -1,7 +1,7 @@
 package tools
 
 import (
-	"context"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -20,7 +20,7 @@ func TestRegisterLazyTools_DoesNotPanic(t *testing.T) {
 
 func TestListCategories_ReturnsExpectedCategories(t *testing.T) {
 	cs, _ := setupLazyWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_list_categories",
@@ -58,13 +58,7 @@ func TestListCategories_ToolCategoriesMap(t *testing.T) {
 	if len(ticketsCat.Tools) == 0 {
 		t.Error("tickets category should have tools")
 	}
-	found := false
-	for _, tool := range ticketsCat.Tools {
-		if tool == "autotask_search_tickets" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(ticketsCat.Tools, "autotask_search_tickets")
 	if !found {
 		t.Error("expected autotask_search_tickets in tickets category")
 	}
@@ -72,7 +66,7 @@ func TestListCategories_ToolCategoriesMap(t *testing.T) {
 
 func TestListCategoryTools_KnownCategory(t *testing.T) {
 	cs, _ := setupLazyWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_list_category_tools",
@@ -98,7 +92,7 @@ func TestListCategoryTools_KnownCategory(t *testing.T) {
 
 func TestListCategoryTools_UnknownCategory(t *testing.T) {
 	cs, _ := setupLazyWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_list_category_tools",
@@ -117,7 +111,7 @@ func TestListCategoryTools_UnknownCategory(t *testing.T) {
 func TestExecuteTool_DispatchesRealTool(t *testing.T) {
 	ticket := autotasktest.TicketFixture()
 	cs, _ := setupLazyWireTest(t, autotasktest.WithEntity(ticket))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_execute_tool",
@@ -141,7 +135,7 @@ func TestExecuteTool_DispatchesRealTool(t *testing.T) {
 
 func TestExecuteTool_UnknownTool(t *testing.T) {
 	cs, _ := setupLazyWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_execute_tool",
@@ -159,7 +153,7 @@ func TestExecuteTool_UnknownTool(t *testing.T) {
 
 func TestExecuteTool_EmptyToolName(t *testing.T) {
 	cs, _ := setupLazyWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_execute_tool",
@@ -184,7 +178,7 @@ func TestExecuteTool_EmptyToolName(t *testing.T) {
 // with zero IDs.
 func TestExecuteTool_RejectsMissingRequiredArgs(t *testing.T) {
 	cs, _ := setupLazyWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_execute_tool",
@@ -206,7 +200,7 @@ func TestExecuteTool_RejectsMissingRequiredArgs(t *testing.T) {
 // silently ignores unknown JSON fields, so only schema validation catches this.
 func TestExecuteTool_RejectsUnknownArg(t *testing.T) {
 	cs, _ := setupLazyWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_execute_tool",
@@ -246,7 +240,7 @@ func TestDispatcher_AllCategoryToolsCovered(t *testing.T) {
 
 func TestRouter_MatchesKeywords(t *testing.T) {
 	cs, _ := setupLazyWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		intent      string
@@ -283,7 +277,7 @@ func TestRouter_MatchesKeywords(t *testing.T) {
 
 func TestRouter_EmptyIntent(t *testing.T) {
 	cs, _ := setupLazyWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_router",
@@ -337,7 +331,7 @@ func TestToolCategories_NoDuplicates(t *testing.T) {
 
 func TestRouter_FallbackToListCategories(t *testing.T) {
 	cs, _ := setupLazyWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_router",

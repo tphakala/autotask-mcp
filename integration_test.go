@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -17,7 +16,7 @@ import (
 // The server and client sessions are cleaned up via t.Cleanup.
 func connectMCP(t *testing.T, client *autotask.Client) *mcp.ClientSession {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	s := buildServer(client, "", false)
 	ct, st := mcp.NewInMemoryTransports()
@@ -41,7 +40,7 @@ func connectMCP(t *testing.T, client *autotask.Client) *mcp.ClientSession {
 // TestIntegration_SearchTickets verifies that the search_tickets tool
 // returns a non-error response when the mock server has ticket fixtures.
 func TestIntegration_SearchTickets(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ticket := autotasktest.TicketFixture()
 	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(ticket))
@@ -65,7 +64,7 @@ func TestIntegration_SearchTickets(t *testing.T) {
 // TestIntegration_SearchTickets_NoResults verifies that the tool handles
 // an empty ticket list gracefully.
 func TestIntegration_SearchTickets_NoResults(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, client := autotasktest.NewServer(t)
 	cs := connectMCP(t, client)
@@ -85,7 +84,13 @@ func TestIntegration_SearchTickets_NoResults(t *testing.T) {
 // TestIntegration_CreateAndGetTicket exercises the create_ticket and
 // get_ticket_details tools end-to-end.
 func TestIntegration_CreateAndGetTicket(t *testing.T) {
-	ctx := context.Background()
+	testIntegrationCreateTicket(t)
+	testIntegrationGetTicket(t)
+}
+
+func testIntegrationCreateTicket(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
 	company := autotasktest.CompanyFixture()
 	_, client := autotasktest.NewServer(t, autotasktest.WithEntity(company))
@@ -128,6 +133,11 @@ func TestIntegration_CreateAndGetTicket(t *testing.T) {
 	if !strings.Contains(titleVal, "Integration test ticket") {
 		t.Errorf("expected title in response, got: %v", ticketResp["title"])
 	}
+}
+
+func testIntegrationGetTicket(t *testing.T) {
+	t.Helper()
+	ctx := t.Context()
 
 	// Now seed a ticket directly and retrieve it by ID.
 	ticket := autotasktest.TicketFixture()
@@ -173,7 +183,7 @@ func TestIntegration_CreateAndGetTicket(t *testing.T) {
 // TestIntegration_SearchCompanies verifies the search_companies tool returns
 // seeded company data.
 func TestIntegration_SearchCompanies(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	alpha := autotasktest.CompanyFixture(func(c *entities.Company) {
 		c.CompanyName = autotask.Set("Alpha Corp")
@@ -210,7 +220,7 @@ func TestIntegration_SearchCompanies(t *testing.T) {
 // TestIntegration_BuildServer_ToolsRegistered verifies that buildServer
 // registers the expected set of tools.
 func TestIntegration_BuildServer_ToolsRegistered(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, client := autotasktest.NewServer(t)
 	cs := connectMCP(t, client)

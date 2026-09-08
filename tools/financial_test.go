@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -23,7 +22,7 @@ func TestRegisterFinancialTools_NoPanic(t *testing.T) {
 // TestGetQuoteHandler_NotFound tests that a missing quote returns an error result over wire.
 func TestGetQuoteHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_quote",
@@ -47,7 +46,7 @@ func TestGetQuoteHandler_Success(t *testing.T) {
 		Name:      autotask.Set("Standard Quote"),
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(quote))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_quote",
@@ -72,7 +71,7 @@ func TestGetQuoteHandler_Success(t *testing.T) {
 // TestSearchQuotesHandler_NoResults tests the empty-result case over wire.
 func TestSearchQuotesHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_quotes",
@@ -94,7 +93,7 @@ func TestSearchQuotesHandler_NoResults(t *testing.T) {
 // TestCreateQuoteHandler_Success tests creating a quote over wire.
 func TestCreateQuoteHandler_Success(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_quote",
@@ -120,7 +119,7 @@ func TestCreateQuoteHandler_Success(t *testing.T) {
 // TestCreateQuoteHandler_InvalidEffectiveDate tests that an invalid date returns an error result over wire.
 func TestCreateQuoteHandler_InvalidEffectiveDate(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_quote",
@@ -140,7 +139,7 @@ func TestCreateQuoteHandler_InvalidEffectiveDate(t *testing.T) {
 // TestCreateQuoteItemHandler_AutoDeterminesType tests creating a quote item over wire.
 func TestCreateQuoteItemHandler_AutoDeterminesType(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_quote_item",
@@ -161,7 +160,7 @@ func TestCreateQuoteItemHandler_AutoDeterminesType(t *testing.T) {
 // TestDeleteQuoteItemHandler_NotFound tests that deleting a missing quote item returns an error over wire.
 func TestDeleteQuoteItemHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_delete_quote_item",
@@ -181,7 +180,7 @@ func TestDeleteQuoteItemHandler_NotFound(t *testing.T) {
 // TestGetOpportunityHandler_NotFound tests that a missing opportunity returns an error result over wire.
 func TestGetOpportunityHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_opportunity",
@@ -200,7 +199,7 @@ func TestGetOpportunityHandler_NotFound(t *testing.T) {
 // TestSearchOpportunitiesHandler_NoResults tests the empty-result case over wire.
 func TestSearchOpportunitiesHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_opportunities",
@@ -222,7 +221,7 @@ func TestSearchOpportunitiesHandler_NoResults(t *testing.T) {
 // TestCreateOpportunityHandler_InvalidDate tests that an invalid date returns an error result over wire.
 func TestCreateOpportunityHandler_InvalidDate(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_opportunity",
@@ -247,7 +246,7 @@ func TestCreateOpportunityHandler_InvalidDate(t *testing.T) {
 // TestCreateOpportunityHandler_Success tests creating an opportunity over wire.
 func TestCreateOpportunityHandler_Success(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_opportunity",
@@ -279,7 +278,7 @@ func TestCreateOpportunityHandler_Success(t *testing.T) {
 // TestSearchContractsHandler_NoResults tests the empty-result case over wire.
 func TestSearchContractsHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_contracts",
@@ -302,7 +301,7 @@ func TestSearchContractsHandler_NoResults(t *testing.T) {
 func TestSearchContractsHandler_WithResults(t *testing.T) {
 	contract := autotasktest.ContractFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(contract))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_contracts",
@@ -324,7 +323,7 @@ func TestSearchContractsHandler_WithResults(t *testing.T) {
 // TestSearchInvoicesHandler_NoResults tests the empty-result case for invoices over wire.
 func TestSearchInvoicesHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_invoices",

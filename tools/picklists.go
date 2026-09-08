@@ -16,28 +16,35 @@ type GetFieldInfoInput struct {
 	FieldName  string `json:"fieldName,omitempty" jsonschema:"Specific field name to retrieve info for"`
 }
 
+const (
+	toolListQueues           = "autotask_list_queues"
+	toolListTicketStatuses   = "autotask_list_ticket_statuses"
+	toolListTicketPriorities = "autotask_list_ticket_priorities"
+	toolGetFieldInfo         = "autotask_get_field_info"
+)
+
 // RegisterPicklistTools registers all picklist-related MCP tools with the server.
 func RegisterPicklistTools(s *mcp.Server, client *autotask.Client, picklist *services.PicklistCache) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_list_queues",
+		Name:        toolListQueues,
 		Description: "Return the id and label of every ticket queue picklist value from the Tickets entity queueID field. Use these ids to resolve a queue by name when routing or filtering tickets; for ticket status or priority values call autotask_list_ticket_statuses or autotask_list_ticket_priorities instead. Served from cached Autotask field metadata. Read-only.",
 		Annotations: readOnlyTool("List queues"),
 	}, listQueuesHandler(picklist))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_list_ticket_statuses",
+		Name:        toolListTicketStatuses,
 		Description: "Return the id and label of every ticket status picklist value from the Tickets entity status field. Use these ids for the status filter of autotask_search_tickets or the status field of autotask_create_ticket and autotask_update_ticket, which all take a numeric status ID; status 5 is the completed state that autotask_search_tickets excludes by default. For queues or priorities call autotask_list_queues or autotask_list_ticket_priorities. Read-only.",
 		Annotations: readOnlyTool("List ticket statuses"),
 	}, listTicketStatusesHandler(picklist))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_list_ticket_priorities",
+		Name:        toolListTicketPriorities,
 		Description: "Return the id and label of every ticket priority picklist value from the Tickets entity priority field. Use these ids to set the priority field on autotask_create_ticket or autotask_update_ticket, which require a numeric priority ID; for statuses or queues call autotask_list_ticket_statuses or autotask_list_queues. Read-only.",
 		Annotations: readOnlyTool("List ticket priorities"),
 	}, listTicketPrioritiesHandler(picklist))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_field_info",
+		Name:        toolGetFieldInfo,
 		Description: "Return field metadata for one Autotask entity type such as Tickets or Companies, including each field's data type, requiredness, and picklist options, for every field or for a single field when fieldName is supplied. Use this to discover valid fields and allowed values on any entity before searching, creating, or updating it; for the common ticket picklists call autotask_list_ticket_statuses, autotask_list_ticket_priorities, or autotask_list_queues directly. Requires entityType and returns all fields unless fieldName matches one. Read-only.",
 		Annotations: readOnlyTool("Get field info"),
 	}, getFieldInfoHandler(picklist))

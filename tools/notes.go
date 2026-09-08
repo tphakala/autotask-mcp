@@ -2,7 +2,7 @@ package tools
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tphakala/autotask-mcp/services"
@@ -91,58 +91,70 @@ func truncateNoteBody(m map[string]any) {
 	}
 }
 
+const (
+	toolGetTicketNote      = "autotask_get_ticket_note"
+	toolSearchTicketNotes  = "autotask_search_ticket_notes"
+	toolCreateTicketNote   = "autotask_create_ticket_note"
+	toolGetProjectNote     = "autotask_get_project_note"
+	toolSearchProjectNotes = "autotask_search_project_notes"
+	toolCreateProjectNote  = "autotask_create_project_note"
+	toolGetCompanyNote     = "autotask_get_company_note"
+	toolSearchCompanyNotes = "autotask_search_company_notes"
+	toolCreateCompanyNote  = "autotask_create_company_note"
+)
+
 // RegisterNoteTools registers all note-related MCP tools with the server.
 func RegisterNoteTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_ticket_note",
+		Name:        toolGetTicketNote,
 		Description: "Retrieve one ticket note by its numeric note ID, returning the complete note title, body, type, and publish scope recorded against a service ticket. Read-only.",
 		Annotations: readOnlyTool("Get ticket note"),
 	}, getTicketNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_ticket_notes",
+		Name:        toolSearchTicketNotes,
 		Description: "List note headers and truncated bodies (first 500 characters) for a ticket, returning a compact summary capped at maxResults (default 25, max 100). Use this to scan a ticket history; use autotask_get_ticket_note for full text. Requires ticketId. Read-only.",
 		Annotations: readOnlyTool("Search ticket notes"),
 	}, searchTicketNotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_ticket_note",
+		Name:        toolCreateTicketNote,
 		Description: "Add a note to an existing ticket from a title and description, with optional noteType and publish scope. Requires ticketId and description. Writes to Autotask.",
 		Annotations: createTool("Create ticket note"),
 	}, createTicketNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_project_note",
+		Name:        toolGetProjectNote,
 		Description: "Retrieve one project note by its numeric note ID, returning the complete note title, description, and type recorded against a project. Read-only.",
 		Annotations: readOnlyTool("Get project note"),
 	}, getProjectNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_project_notes",
+		Name:        toolSearchProjectNotes,
 		Description: "List note headers and truncated descriptions (first 500 characters) for a project, returning a compact summary capped at maxResults (default 25, max 100). Use autotask_get_project_note for full text. Requires projectId. Read-only.",
 		Annotations: readOnlyTool("Search project notes"),
 	}, searchProjectNotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_project_note",
+		Name:        toolCreateProjectNote,
 		Description: "Add a note to an existing project from a description and optional title and noteType. Requires projectId and description. Writes to Autotask.",
 		Annotations: createTool("Create project note"),
 	}, createProjectNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_company_note",
+		Name:        toolGetCompanyNote,
 		Description: "Retrieve one company note by its numeric note ID, returning the complete note name, body, and action type recorded against a company account. Read-only.",
 		Annotations: readOnlyTool("Get company note"),
 	}, getCompanyNoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_company_notes",
+		Name:        toolSearchCompanyNotes,
 		Description: "List note headers and truncated bodies (first 500 characters) for a company, returning a compact summary capped at maxResults (default 25, max 100). Use autotask_get_company_note for full text. Requires companyId. Read-only.",
 		Annotations: readOnlyTool("Search company notes"),
 	}, searchCompanyNotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_company_note",
+		Name:        toolCreateCompanyNote,
 		Description: "Add a note to an existing company account from a description (body) and optional title (name) and actionType. Requires companyId and description. Writes to Autotask.",
 		Annotations: createTool("Create company note"),
 	}, createCompanyNoteHandler(client))
@@ -172,7 +184,7 @@ func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context,
 		// truncated BEFORE it is framed. entitiesToMaps frames via entityToMap, and
 		// truncating an already-framed body severs the closing boundary marker and
 		// leaves a stray escaped tag. This mirrors the project/company note handlers.
-		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitSmall)
 		notes, hasMore, err := collectBoundedChildRaw(
 			autotask.ListChildRawIter(ctx, client, "Tickets", in.TicketID, "TicketNotes"), maxResults)
 		if err != nil {
@@ -189,7 +201,7 @@ func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context,
 
 		hint := ""
 		if hasMore {
-			hint = "Maximum result limit reached. Use narrower search filters to find specific records."
+			hint = maxResultsHint
 		}
 
 		return nil, services.CompactResponse{
@@ -208,7 +220,7 @@ func searchTicketNotesHandler(client *autotask.Client) func(ctx context.Context,
 func createTicketNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTicketNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		if in.Description == "" {
-			return nil, nil, fmt.Errorf("description is required")
+			return nil, nil, errors.New("description is required")
 		}
 		note := &entities.TicketNote{
 			Description: autotask.Set(in.Description),
@@ -258,7 +270,7 @@ func getProjectNoteHandler(client *autotask.Client) func(ctx context.Context, re
 // searchProjectNotesHandler returns a handler that lists notes for a project.
 func searchProjectNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProjectNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitSmall)
 		notes, hasMore, err := collectBoundedChildRaw(
 			autotask.ListChildRawIter(ctx, client, "Projects", in.ProjectID, "ProjectNotes"), maxResults)
 		if err != nil {
@@ -275,7 +287,7 @@ func searchProjectNotesHandler(client *autotask.Client) func(ctx context.Context
 
 		hint := ""
 		if hasMore {
-			hint = "Maximum result limit reached. Use narrower search filters to find specific records."
+			hint = maxResultsHint
 		}
 
 		return nil, services.CompactResponse{
@@ -294,7 +306,7 @@ func searchProjectNotesHandler(client *autotask.Client) func(ctx context.Context
 func createProjectNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateProjectNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		if in.Description == "" {
-			return nil, nil, fmt.Errorf("description is required")
+			return nil, nil, errors.New("description is required")
 		}
 		note := &entities.ProjectNote{
 			Description: autotask.Set(in.Description),
@@ -340,7 +352,7 @@ func getCompanyNoteHandler(client *autotask.Client) func(ctx context.Context, re
 // searchCompanyNotesHandler returns a handler that lists notes for a company.
 func searchCompanyNotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompanyNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompanyNotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitSmall)
 		notes, hasMore, err := collectBoundedChildRaw(
 			autotask.ListChildRawIter(ctx, client, "Companies", in.CompanyID, "CompanyNotes"), maxResults)
 		if err != nil {
@@ -357,7 +369,7 @@ func searchCompanyNotesHandler(client *autotask.Client) func(ctx context.Context
 
 		hint := ""
 		if hasMore {
-			hint = "Maximum result limit reached. Use narrower search filters to find specific records."
+			hint = maxResultsHint
 		}
 
 		return nil, services.CompactResponse{
@@ -376,7 +388,7 @@ func searchCompanyNotesHandler(client *autotask.Client) func(ctx context.Context
 func createCompanyNoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateCompanyNoteInput) (*mcp.CallToolResult, map[string]any, error) {
 		if in.Description == "" {
-			return nil, nil, fmt.Errorf("description is required")
+			return nil, nil, errors.New("description is required")
 		}
 		// CompanyNote uses different field names than TicketNote/ProjectNote:
 		// Input.Description -> entity.Note (body text)

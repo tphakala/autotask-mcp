@@ -1,7 +1,6 @@
 package resources
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -129,7 +128,7 @@ func TestGetTicketHandler_FramesUntrustedContent(t *testing.T) {
 
 	handler := getTicketHandler(client)
 	req := &mcp.ReadResourceRequest{Params: &mcp.ReadResourceParams{URI: fmt.Sprintf("autotask://tickets/%d", id)}}
-	res, err := handler(context.Background(), req)
+	res, err := handler(t.Context(), req)
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}

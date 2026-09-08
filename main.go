@@ -45,8 +45,11 @@ func main() {
 		case "doctor", "--doctor":
 			cfg := loadConfig()
 			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-			defer cancel()
-			if err := runDoctor(ctx, cfg, os.Stdout); err != nil {
+			// cancel() explicitly rather than via defer: os.Exit below would skip a
+			// deferred call, leaking the signal registration.
+			err := runDoctor(ctx, &cfg, os.Stdout)
+			cancel()
+			if err != nil {
 				os.Exit(1)
 			}
 			return
@@ -83,10 +86,12 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
-
-	if err := run(ctx, cfg, logger); err != nil {
-		printActionableStartupError(err, cfg)
+	// cancel() explicitly rather than via defer: os.Exit below would skip a
+	// deferred call, leaking the signal registration.
+	err := run(ctx, &cfg, logger)
+	cancel()
+	if err != nil {
+		printActionableStartupError(err, &cfg)
 		os.Exit(1)
 	}
 }

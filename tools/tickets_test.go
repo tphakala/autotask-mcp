@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -25,7 +24,7 @@ func TestRegisterTicketTools_NoPanic(t *testing.T) {
 // TestSearchTicketsHandler_ReturnsNoTicketsFound tests the empty-result case over wire protocol.
 func TestSearchTicketsHandler_ReturnsNoTicketsFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_tickets",
@@ -51,7 +50,7 @@ func TestSearchTicketsHandler_ReturnsNoTicketsFound(t *testing.T) {
 func TestSearchTicketsHandler_ReturnsTickets(t *testing.T) {
 	ticket := autotasktest.TicketFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(ticket))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_tickets",
@@ -85,7 +84,7 @@ func TestSearchTicketsHandler_ReturnsTickets(t *testing.T) {
 func TestSearchTicketsHandler_AccurateHasMore(t *testing.T) {
 	seed := func(n int) []entities.Ticket {
 		tickets := make([]entities.Ticket, 0, n)
-		for i := 0; i < n; i++ {
+		for range n {
 			tickets = append(tickets, autotasktest.TicketFixture(func(tk *entities.Ticket) {
 				tk.Status = autotask.Set(int64(1))
 			}))
@@ -94,7 +93,7 @@ func TestSearchTicketsHandler_AccurateHasMore(t *testing.T) {
 	}
 	call := func(t *testing.T, cs *mcp.ClientSession, maxResults int) services.CompactResponse {
 		t.Helper()
-		result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+		result, err := cs.CallTool(t.Context(), &mcp.CallToolParams{
 			Name:      "autotask_search_tickets",
 			Arguments: map[string]any{"status": 1, "maxResults": maxResults},
 		})
@@ -123,7 +122,7 @@ func TestSearchTicketsHandler_AccurateHasMore(t *testing.T) {
 func TestSearchTicketsHandler_DefaultExcludesCompleted(t *testing.T) {
 	openTicket := autotasktest.TicketFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(openTicket))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_tickets",
@@ -146,7 +145,7 @@ func TestGetTicketDetailsHandler_Success(t *testing.T) {
 	}
 
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(ticket))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_ticket_details",
@@ -186,7 +185,7 @@ func TestGetTicketDetailsHandler_FramesEnhancedNames(t *testing.T) {
 	ticketID, _ := ticket.ID.Get()
 
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(company), autotasktest.WithEntity(ticket))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_get_ticket_details",
@@ -217,7 +216,7 @@ func TestGetTicketDetailsHandler_FramesEnhancedNames(t *testing.T) {
 // TestGetTicketDetailsHandler_NotFound tests that a missing ticket returns an error result over wire.
 func TestGetTicketDetailsHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_ticket_details",
@@ -236,7 +235,7 @@ func TestGetTicketDetailsHandler_NotFound(t *testing.T) {
 // TestCreateTicketHandler_Success tests creating a ticket over wire protocol.
 func TestCreateTicketHandler_Success(t *testing.T) {
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.TicketFixture()))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_ticket",
@@ -271,7 +270,7 @@ func TestUpdateTicketHandler_Success(t *testing.T) {
 	}
 
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(ticket))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_update_ticket",
@@ -304,7 +303,7 @@ func TestUpdateTicketHandler_InvalidDueDateTime(t *testing.T) {
 	}
 
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(ticket))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_update_ticket",
@@ -325,7 +324,7 @@ func TestUpdateTicketHandler_InvalidDueDateTime(t *testing.T) {
 func TestSearchTicketsHandler_WithFilters(t *testing.T) {
 	ticket := autotasktest.TicketFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(ticket))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_tickets",
@@ -347,7 +346,7 @@ func TestSearchTicketsHandler_WithFilters(t *testing.T) {
 // TestSearchTicketsHandler_UnassignedFilter verifies unassigned flag over wire.
 func TestSearchTicketsHandler_UnassignedFilter(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_tickets",

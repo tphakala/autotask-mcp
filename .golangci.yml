@@ -1,7 +1,118 @@
 version: "2"
-
-# golangci-lint v2 configuration (pinned to v2.13.2 in CI).
-# Uses the standard default linter set; add entries under linters.enable
-# to opt into more checks as the codebase warrants.
+output:
+  sort-order:
+    - linter
+    - severity
+    - file
+# golangci-lint v2 runs formatters from this top-level key, not from linters.enable.
+# Without it, "golangci-lint run" reports no formatting issues at all, so CI would
+# accept unformatted code even though goimports would reorder the imports.
+formatters:
+  enable:
+    - goimports
 linters:
-  default: standard
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - decorder
+    - durationcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - forcetypeassert
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - gosec
+    - iface
+    - ineffassign
+    - makezero
+    - misspell
+    - mnd
+    #- modernize  # disabled: rules/*.go (ruleguard) carry the Go 1.20 through Go 1.27 modernization patterns instead
+    - musttag
+    - nakedret
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - noctx
+    #- nolintlint
+    - perfsprint
+    - prealloc
+    - predeclared
+    - recvcheck
+    - revive
+    - sloglint
+    - staticcheck
+    - testifylint
+    - thelper
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+  exclusions:
+    rules:
+      - path: '_test\.go'
+        linters:
+          - goconst
+  settings:
+    goconst:
+      # Do not count string literals in _test.go files toward the
+      # extract-a-constant threshold. Test inputs like "pre"/"post" are the
+      # API contract a test pins by literal; counting them would force a
+      # production constant and weaken the test.
+      ignore-tests: true
+    gocognit:
+      min-complexity: 20
+    gocritic:
+      disabled-checks:
+        - commentFormatting
+        - commentedOutCode
+      enabled-tags:
+        - style
+        - diagnostic
+        - performance
+      settings:
+        ruleguard:
+          rules: "rules/*.go"
+    gocyclo:
+      min-complexity: 15
+    revive:
+      rules:
+        - name: unused-parameter
+          disabled: true
+    gosec:
+      # No severity or confidence floor. G101 (hardcoded credentials) and G112
+      # (missing ReadHeaderTimeout) are emitted below a medium confidence floor,
+      # and both matter for a server that holds Autotask API credentials and
+      # serves HTTP/SSE.
+      #
+      # Do NOT read this as full InsecureSkipVerify coverage. gosec detects G402
+      # only in composite-literal form, tls.Config{InsecureSkipVerify: x}. The
+      # assignment form, c.InsecureSkipVerify = x, produces no finding, so a
+      # skip-verify path written that way has to be caught in review.
+      #
+      # Exclude specific rule IDs with a written reason instead of a floor.
+      excludes:
+        - G104  # Audit errors not checked (covered by errcheck)
+    prealloc:
+      # Configure prealloc for slice optimization
+      simple: true
+      range-loops: true
+      for-loops: true
+    exhaustive:
+      # Check exhaustiveness of enum switch statements
+      default-signifies-exhaustive: true
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: true
+  new: false

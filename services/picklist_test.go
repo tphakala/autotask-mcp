@@ -1,11 +1,9 @@
 package services
 
 import (
-	"context"
 	"testing"
 
 	"github.com/tphakala/go-autotask/autotasktest"
-	"github.com/tphakala/go-autotask/metadata"
 )
 
 func fieldsFixture() map[string]any {
@@ -41,7 +39,7 @@ func TestGetFields_FromAPI(t *testing.T) {
 	)
 	cache := NewPicklistCache(client)
 
-	fields, err := cache.GetFields(context.Background(), "Tickets")
+	fields, err := cache.GetFields(t.Context(), "Tickets")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -58,13 +56,13 @@ func TestGetFields_CacheHit(t *testing.T) {
 	cache := NewPicklistCache(client)
 
 	// First call
-	fields1, err := cache.GetFields(context.Background(), "Tickets")
+	fields1, err := cache.GetFields(t.Context(), "Tickets")
 	if err != nil {
 		t.Fatalf("first call error: %v", err)
 	}
 
 	// Second call should hit cache
-	fields2, err := cache.GetFields(context.Background(), "Tickets")
+	fields2, err := cache.GetFields(t.Context(), "Tickets")
 	if err != nil {
 		t.Fatalf("second call error: %v", err)
 	}
@@ -80,7 +78,7 @@ func TestGetPicklistValues_Success(t *testing.T) {
 	)
 	cache := NewPicklistCache(client)
 
-	values, err := cache.GetPicklistValues(context.Background(), "Tickets", "status")
+	values, err := cache.GetPicklistValues(t.Context(), "Tickets", "status")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,7 +86,7 @@ func TestGetPicklistValues_Success(t *testing.T) {
 		t.Fatalf("expected 2 picklist values, got %d", len(values))
 	}
 
-	var labels []string
+	labels := make([]string, 0, len(values))
 	for _, v := range values {
 		labels = append(labels, v.Label)
 	}
@@ -103,7 +101,7 @@ func TestGetPicklistValues_NotAPicklist(t *testing.T) {
 	)
 	cache := NewPicklistCache(client)
 
-	_, err := cache.GetPicklistValues(context.Background(), "Tickets", "title")
+	_, err := cache.GetPicklistValues(t.Context(), "Tickets", "title")
 	if err == nil {
 		t.Error("expected error for non-picklist field")
 	}
@@ -115,7 +113,7 @@ func TestGetPicklistValues_FieldNotFound(t *testing.T) {
 	)
 	cache := NewPicklistCache(client)
 
-	_, err := cache.GetPicklistValues(context.Background(), "Tickets", "nonExistentField")
+	_, err := cache.GetPicklistValues(t.Context(), "Tickets", "nonExistentField")
 	if err == nil {
 		t.Error("expected error for non-existent field")
 	}
@@ -126,7 +124,7 @@ func TestGetFields_APIError(t *testing.T) {
 	client := autotasktest.NewMockClient(t)
 	cache := NewPicklistCache(client)
 
-	_, err := cache.GetFields(context.Background(), "Tickets")
+	_, err := cache.GetFields(t.Context(), "Tickets")
 	if err == nil {
 		t.Error("expected error when API returns no fixture")
 	}
@@ -139,13 +137,11 @@ func TestPicklistCacheTypes(t *testing.T) {
 	)
 	cache := NewPicklistCache(client)
 
-	fields, err := cache.GetFields(context.Background(), "Tickets")
+	fields, err := cache.GetFields(t.Context(), "Tickets")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify the type is correct
-	_ = []metadata.FieldInfo(fields)
 	if len(fields) == 0 {
 		t.Fatal("expected non-empty fields slice")
 	}

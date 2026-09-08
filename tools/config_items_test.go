@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -20,7 +19,7 @@ func TestRegisterConfigItemTools_NoPanic(t *testing.T) {
 // TestSearchConfigurationItemsHandler_NoResults tests the empty-result case over wire.
 func TestSearchConfigurationItemsHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_configuration_items",
@@ -46,7 +45,7 @@ func TestSearchConfigurationItemsHandler_NoResults(t *testing.T) {
 func TestSearchConfigurationItemsHandler_WithResults(t *testing.T) {
 	ci := autotasktest.ConfigurationItemFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(ci))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_configuration_items",
@@ -75,7 +74,7 @@ func TestSearchConfigurationItemsHandler_WithResults(t *testing.T) {
 func TestSearchConfigurationItemsHandler_WithFilters(t *testing.T) {
 	ci := autotasktest.ConfigurationItemFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(ci))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	active := true
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{

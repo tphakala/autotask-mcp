@@ -9,6 +9,11 @@ import (
 	"github.com/tphakala/go-autotask/entities"
 )
 
+const (
+	toolSearchConfigurationItems = "autotask_search_configuration_items"
+	descSearchConfigurationItems = "Search configuration items"
+)
+
 // SearchConfigurationItemsInput defines the input parameters for searching configuration items.
 type SearchConfigurationItemsInput struct {
 	SearchTerm string `json:"searchTerm,omitempty" jsonschema:"Search by reference title (partial match)"`
@@ -21,16 +26,16 @@ type SearchConfigurationItemsInput struct {
 // RegisterConfigItemTools registers all configuration item MCP tools with the server.
 func RegisterConfigItemTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_configuration_items",
+		Name:        toolSearchConfigurationItems,
 		Description: "Find configuration items (CIs: assets or installed products tracked against a company) by reference-title substring, company, active status, or product, returning a compact summary of up to maxResults (default 25, max 500). CIs link a company to the products it owns; filter by companyID to list one company's assets or by productID (from autotask_search_products) to find every install of a product. Read-only.",
-		Annotations: readOnlyTool("Search configuration items"),
+		Annotations: readOnlyTool(descSearchConfigurationItems),
 	}, searchConfigurationItemsHandler(client, mapper))
 }
 
 // searchConfigurationItemsHandler returns a handler that searches configuration items.
 func searchConfigurationItemsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchConfigurationItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchConfigurationItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
@@ -60,6 +65,6 @@ func searchConfigurationItemsHandler(client *autotask.Client, mapper *services.M
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_configuration_items", maxResults)
+		return searchResult(ctx, mapper, maps, toolSearchConfigurationItems, maxResults)
 	}
 }

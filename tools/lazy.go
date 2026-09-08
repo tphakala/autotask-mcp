@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -22,112 +23,112 @@ type CategoryInfo struct {
 var ToolCategories = map[string]CategoryInfo{
 	"utility": {
 		Description: "Connection testing and field/picklist discovery",
-		Tools:       []string{"autotask_test_connection", "autotask_list_queues", "autotask_list_ticket_statuses", "autotask_list_ticket_priorities", "autotask_get_field_info"},
+		Tools:       []string{toolTestConnection, toolListQueues, toolListTicketStatuses, toolListTicketPriorities, toolGetFieldInfo},
 	},
 	"companies": {
 		Description: "Search, create, and update companies",
-		Tools:       []string{"autotask_search_companies", "autotask_create_company", "autotask_update_company"},
+		Tools:       []string{toolSearchCompanies, toolCreateCompany, toolUpdateCompany},
 	},
 	"contacts": {
 		Description: "Search and create contacts",
-		Tools:       []string{"autotask_search_contacts", "autotask_create_contact"},
+		Tools:       []string{toolSearchContacts, toolCreateContact},
 	},
 	"tickets": {
 		Description: "Search, create, update tickets and manage notes/attachments",
-		Tools:       []string{"autotask_search_tickets", "autotask_get_ticket_details", "autotask_create_ticket", "autotask_update_ticket", "autotask_get_ticket_note", "autotask_search_ticket_notes", "autotask_create_ticket_note", "autotask_get_ticket_attachment", "autotask_search_ticket_attachments"},
+		Tools:       []string{toolSearchTickets, toolGetTicketDetails, toolCreateTicket, toolUpdateTicket, toolGetTicketNote, toolSearchTicketNotes, toolCreateTicketNote, toolGetTicketAttachment, toolSearchTicketAttachments},
 	},
 	"projects": {
 		Description: "Search and create projects, tasks, and project notes",
-		Tools:       []string{"autotask_search_projects", "autotask_create_project", "autotask_search_tasks", "autotask_create_task", "autotask_get_project_note", "autotask_search_project_notes", "autotask_create_project_note"},
+		Tools:       []string{toolSearchProjects, toolCreateProject, toolSearchTasks, toolCreateTask, toolGetProjectNote, toolSearchProjectNotes, toolCreateProjectNote},
 	},
 	"time_and_billing": {
 		Description: "Time entries, billing items, and expense management",
-		Tools:       []string{"autotask_create_time_entry", "autotask_search_time_entries", "autotask_search_billing_items", "autotask_get_billing_item", "autotask_search_billing_item_approval_levels", "autotask_get_expense_report", "autotask_search_expense_reports", "autotask_create_expense_report", "autotask_create_expense_item"},
+		Tools:       []string{toolCreateTimeEntry, toolSearchTimeEntries, toolSearchBillingItems, toolGetBillingItem, toolSearchBillingItemApprovalLevels, toolGetExpenseReport, toolSearchExpenseReports, toolCreateExpenseReport, toolCreateExpenseItem},
 	},
 	"financial": {
 		Description: "Quotes, quote items, opportunities, invoices, and contracts",
-		Tools:       []string{"autotask_get_quote", "autotask_search_quotes", "autotask_create_quote", "autotask_get_quote_item", "autotask_search_quote_items", "autotask_create_quote_item", "autotask_update_quote_item", "autotask_delete_quote_item", "autotask_get_opportunity", "autotask_search_opportunities", "autotask_create_opportunity", "autotask_search_invoices", "autotask_search_contracts"},
+		Tools:       []string{toolGetQuote, toolSearchQuotes, toolCreateQuote, toolGetQuoteItem, toolSearchQuoteItems, toolCreateQuoteItem, toolUpdateQuoteItem, toolDeleteQuoteItem, toolGetOpportunity, toolSearchOpportunities, toolCreateOpportunity, toolSearchInvoices, toolSearchContracts},
 	},
 	"products_and_services": {
 		Description: "Products, services, and service bundles catalog",
-		Tools:       []string{"autotask_get_product", "autotask_search_products", "autotask_get_service", "autotask_search_services", "autotask_get_service_bundle", "autotask_search_service_bundles"},
+		Tools:       []string{toolGetProduct, toolSearchProducts, toolGetService, toolSearchServices, toolGetServiceBundle, toolSearchServiceBundles},
 	},
 	"resources": {
 		Description: "Search for Autotask resources",
-		Tools:       []string{"autotask_search_resources"},
+		Tools:       []string{toolSearchResources},
 	},
 	"configuration_items": {
 		Description: "Search configuration items",
-		Tools:       []string{"autotask_search_configuration_items"},
+		Tools:       []string{toolSearchConfigurationItems},
 	},
 	"company_notes": {
 		Description: "Get, search, and create company notes",
-		Tools:       []string{"autotask_get_company_note", "autotask_search_company_notes", "autotask_create_company_note"},
+		Tools:       []string{toolGetCompanyNote, toolSearchCompanyNotes, toolCreateCompanyNote},
 	},
 }
 
 // toolDescriptions maps tool names to their human-readable descriptions.
 // Used by autotask_list_category_tools.
 var toolDescriptions = map[string]string{
-	"autotask_test_connection":                     "Test connectivity to the Autotask API",
-	"autotask_list_queues":                         "List available ticket queues",
-	"autotask_list_ticket_statuses":                "List available ticket status values",
-	"autotask_list_ticket_priorities":              "List available ticket priority values",
-	"autotask_get_field_info":                      "Get field metadata for an entity type",
-	"autotask_search_companies":                    "Search for companies",
-	"autotask_create_company":                      "Create a new company",
-	"autotask_update_company":                      "Update an existing company",
-	"autotask_search_contacts":                     "Search for contacts",
-	"autotask_create_contact":                      "Create a new contact",
-	"autotask_search_tickets":                      "Search for tickets",
-	"autotask_get_ticket_details":                  "Get detailed information for a ticket",
-	"autotask_create_ticket":                       "Create a new ticket",
-	"autotask_update_ticket":                       "Update an existing ticket",
-	"autotask_get_ticket_note":                     "Get a specific ticket note by ID",
-	"autotask_search_ticket_notes":                 "Search ticket notes",
-	"autotask_create_ticket_note":                  "Create a new note on a ticket",
-	"autotask_get_ticket_attachment":               "Get a ticket attachment by ID",
-	"autotask_search_ticket_attachments":           "Search ticket attachments",
-	"autotask_search_projects":                     "Search for projects",
-	"autotask_create_project":                      "Create a new project",
-	"autotask_search_tasks":                        "Search for project tasks",
-	"autotask_create_task":                         "Create a new project task",
-	"autotask_get_project_note":                    "Get a project note by ID",
-	"autotask_search_project_notes":                "Search project notes",
-	"autotask_create_project_note":                 "Create a new project note",
-	"autotask_create_time_entry":                   "Create a new time entry",
-	"autotask_search_time_entries":                 "Search time entries",
-	"autotask_search_billing_items":                "Search billing items",
-	"autotask_get_billing_item":                    "Get a billing item by ID",
-	"autotask_search_billing_item_approval_levels": "List billing item approval levels",
-	"autotask_get_expense_report":                  "Get an expense report by ID",
-	"autotask_search_expense_reports":              "Search expense reports",
-	"autotask_create_expense_report":               "Create a new expense report",
-	"autotask_create_expense_item":                 "Create a new expense item",
-	"autotask_get_quote":                           "Get a quote by ID",
-	"autotask_search_quotes":                       "Search quotes",
-	"autotask_create_quote":                        "Create a new quote",
-	"autotask_get_quote_item":                      "Get a quote item by ID",
-	"autotask_search_quote_items":                  "Search quote items",
-	"autotask_create_quote_item":                   "Create a new quote item",
-	"autotask_update_quote_item":                   "Update an existing quote item",
-	"autotask_delete_quote_item":                   "Delete a quote item",
-	"autotask_get_opportunity":                     "Get an opportunity by ID",
-	"autotask_search_opportunities":                "Search opportunities",
-	"autotask_create_opportunity":                  "Create a new opportunity",
-	"autotask_search_invoices":                     "Search invoices",
-	"autotask_search_contracts":                    "Search contracts",
-	"autotask_get_product":                         "Get a product by ID",
-	"autotask_search_products":                     "Search products",
-	"autotask_get_service":                         "Get a service by ID",
-	"autotask_search_services":                     "Search services",
-	"autotask_get_service_bundle":                  "Get a service bundle by ID",
-	"autotask_search_service_bundles":              "Search service bundles",
-	"autotask_search_resources":                    "Search for Autotask resources (employees/contacts)",
-	"autotask_search_configuration_items":          "Search configuration items",
-	"autotask_get_company_note":                    "Get a company note by ID",
-	"autotask_search_company_notes":                "Search company notes",
-	"autotask_create_company_note":                 "Create a new company note",
+	toolTestConnection:                  "Test connectivity to the Autotask API",
+	toolListQueues:                      "List available ticket queues",
+	toolListTicketStatuses:              "List available ticket status values",
+	toolListTicketPriorities:            "List available ticket priority values",
+	toolGetFieldInfo:                    "Get field metadata for an entity type",
+	toolSearchCompanies:                 "Search for companies",
+	toolCreateCompany:                   "Create a new company",
+	toolUpdateCompany:                   "Update an existing company",
+	toolSearchContacts:                  "Search for contacts",
+	toolCreateContact:                   "Create a new contact",
+	toolSearchTickets:                   "Search for tickets",
+	toolGetTicketDetails:                "Get detailed information for a ticket",
+	toolCreateTicket:                    "Create a new ticket",
+	toolUpdateTicket:                    "Update an existing ticket",
+	toolGetTicketNote:                   "Get a specific ticket note by ID",
+	toolSearchTicketNotes:               "Search ticket notes",
+	toolCreateTicketNote:                "Create a new note on a ticket",
+	toolGetTicketAttachment:             "Get a ticket attachment by ID",
+	toolSearchTicketAttachments:         "Search ticket attachments",
+	toolSearchProjects:                  "Search for projects",
+	toolCreateProject:                   "Create a new project",
+	toolSearchTasks:                     "Search for project tasks",
+	toolCreateTask:                      "Create a new project task",
+	toolGetProjectNote:                  "Get a project note by ID",
+	toolSearchProjectNotes:              "Search project notes",
+	toolCreateProjectNote:               "Create a new project note",
+	toolCreateTimeEntry:                 "Create a new time entry",
+	toolSearchTimeEntries:               "Search time entries",
+	toolSearchBillingItems:              "Search billing items",
+	toolGetBillingItem:                  "Get a billing item by ID",
+	toolSearchBillingItemApprovalLevels: "List billing item approval levels",
+	toolGetExpenseReport:                "Get an expense report by ID",
+	toolSearchExpenseReports:            "Search expense reports",
+	toolCreateExpenseReport:             "Create a new expense report",
+	toolCreateExpenseItem:               "Create a new expense item",
+	toolGetQuote:                        "Get a quote by ID",
+	toolSearchQuotes:                    "Search quotes",
+	toolCreateQuote:                     "Create a new quote",
+	toolGetQuoteItem:                    "Get a quote item by ID",
+	toolSearchQuoteItems:                "Search quote items",
+	toolCreateQuoteItem:                 "Create a new quote item",
+	toolUpdateQuoteItem:                 "Update an existing quote item",
+	toolDeleteQuoteItem:                 "Delete a quote item",
+	toolGetOpportunity:                  "Get an opportunity by ID",
+	toolSearchOpportunities:             "Search opportunities",
+	toolCreateOpportunity:               "Create a new opportunity",
+	toolSearchInvoices:                  "Search invoices",
+	toolSearchContracts:                 "Search contracts",
+	toolGetProduct:                      "Get a product by ID",
+	toolSearchProducts:                  "Search products",
+	toolGetService:                      "Get a service by ID",
+	toolSearchServices:                  "Search services",
+	toolGetServiceBundle:                "Get a service bundle by ID",
+	toolSearchServiceBundles:            "Search service bundles",
+	toolSearchResources:                 "Search for Autotask resources (employees/contacts)",
+	toolSearchConfigurationItems:        descSearchConfigurationItems,
+	toolGetCompanyNote:                  "Get a company note by ID",
+	toolSearchCompanyNotes:              "Search company notes",
+	toolCreateCompanyNote:               "Create a new company note",
 }
 
 // routingRules maps keywords to suggested tools for autotask_router.
@@ -136,22 +137,22 @@ var routingRules = []struct {
 	tool        string
 	description string
 }{
-	{[]string{"create ticket", "new ticket", "open ticket"}, "autotask_create_ticket", "Create a new ticket"},
-	{[]string{"ticket", "issue", "problem", "request"}, "autotask_search_tickets", "Search for tickets"},
-	{[]string{"company", "companies", "account", "client", "customer"}, "autotask_search_companies", "Search for companies"},
-	{[]string{"contact", "contacts", "person", "user"}, "autotask_search_contacts", "Search for contacts"},
-	{[]string{"time", "hours", "timesheet"}, "autotask_search_time_entries", "Search time entries"},
-	{[]string{"project"}, "autotask_search_projects", "Search for projects"},
-	{[]string{"task"}, "autotask_search_tasks", "Search for tasks"},
-	{[]string{"billing", "invoice", "charge"}, "autotask_search_billing_items", "Search billing items"},
-	{[]string{"expense", "cost"}, "autotask_search_expense_reports", "Search expense reports"},
-	{[]string{"quote", "proposal"}, "autotask_search_quotes", "Search quotes"},
-	{[]string{"opportunity", "deal", "sale"}, "autotask_search_opportunities", "Search opportunities"},
-	{[]string{"contract"}, "autotask_search_contracts", "Search contracts"},
-	{[]string{"product", "item", "sku"}, "autotask_search_products", "Search products"},
-	{[]string{"service"}, "autotask_search_services", "Search services"},
-	{[]string{"resource", "employee", "tech"}, "autotask_search_resources", "Search resources"},
-	{[]string{"config", "configuration", "device", "asset"}, "autotask_search_configuration_items", "Search configuration items"},
+	{[]string{"create ticket", "new ticket", "open ticket"}, toolCreateTicket, "Create a new ticket"},
+	{[]string{"ticket", "issue", "problem", "request"}, toolSearchTickets, "Search for tickets"},
+	{[]string{"company", "companies", "account", "client", "customer"}, toolSearchCompanies, "Search for companies"},
+	{[]string{"contact", "contacts", "person", "user"}, toolSearchContacts, "Search for contacts"},
+	{[]string{"time", "hours", "timesheet"}, toolSearchTimeEntries, "Search time entries"},
+	{[]string{"project"}, toolSearchProjects, "Search for projects"},
+	{[]string{"task"}, toolSearchTasks, "Search for tasks"},
+	{[]string{"billing", "invoice", "charge"}, toolSearchBillingItems, "Search billing items"},
+	{[]string{"expense", "cost"}, toolSearchExpenseReports, "Search expense reports"},
+	{[]string{"quote", "proposal"}, toolSearchQuotes, "Search quotes"},
+	{[]string{"opportunity", "deal", "sale"}, toolSearchOpportunities, "Search opportunities"},
+	{[]string{"contract"}, toolSearchContracts, "Search contracts"},
+	{[]string{"product", "item", "sku"}, toolSearchProducts, "Search products"},
+	{[]string{"service"}, toolSearchServices, "Search services"},
+	{[]string{"resource", "employee", "tech"}, toolSearchResources, "Search resources"},
+	{[]string{"config", "configuration", "device", "asset"}, toolSearchConfigurationItems, descSearchConfigurationItems},
 }
 
 // ListCategoriesInput has no required fields.
@@ -206,7 +207,7 @@ func makeRunner[In, Out any](handler func(context.Context, *mcp.CallToolRequest,
 	resolved := resolveInputSchema[In]()
 	return func(ctx context.Context, rawArgs map[string]any) (*mcp.CallToolResult, any, error) {
 		if handler == nil {
-			return nil, nil, fmt.Errorf("tool handler is not configured")
+			return nil, nil, errors.New("tool handler is not configured")
 		}
 
 		args := rawArgs
@@ -214,31 +215,16 @@ func makeRunner[In, Out any](handler func(context.Context, *mcp.CallToolRequest,
 			args = map[string]any{}
 		}
 
-		// Validate the raw arguments against the tool's input schema, mirroring the
-		// SDK's direct-call path: unmarshal to a map, apply defaults, then validate.
-		if resolved != nil {
-			var v any = args
-			if err := resolved.ApplyDefaults(&v); err != nil {
-				return nil, nil, fmt.Errorf("applying argument defaults: %w", err)
-			}
-			if err := resolved.Validate(&v); err != nil {
-				return nil, nil, fmt.Errorf("invalid arguments: %w", err)
-			}
-			if m, ok := v.(map[string]any); ok {
-				args = m
-			}
+		validatedArgs, err := validateRunnerArgs(resolved, args)
+		if err != nil {
+			return nil, nil, err
 		}
 
-		var in In
-		if len(args) > 0 {
-			data, err := json.Marshal(args)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to encode tool arguments: %w", err)
-			}
-			if err := json.Unmarshal(data, &in); err != nil {
-				return nil, nil, fmt.Errorf("failed to decode arguments into target parameter schema: %w", err)
-			}
+		in, err := unmarshalRunnerArgs[In](validatedArgs)
+		if err != nil {
+			return nil, nil, err
 		}
+
 		res, out, err := handler(ctx, &mcp.CallToolRequest{}, in)
 		if err != nil {
 			return nil, nil, err
@@ -247,99 +233,131 @@ func makeRunner[In, Out any](handler func(context.Context, *mcp.CallToolRequest,
 	}
 }
 
+func validateRunnerArgs(resolved *jsonschema.Resolved, args map[string]any) (map[string]any, error) {
+	if resolved == nil {
+		return args, nil
+	}
+	var v any = args
+	if err := resolved.ApplyDefaults(&v); err != nil {
+		return nil, fmt.Errorf("applying argument defaults: %w", err)
+	}
+	if err := resolved.Validate(&v); err != nil {
+		return nil, fmt.Errorf("invalid arguments: %w", err)
+	}
+	if m, ok := v.(map[string]any); ok {
+		return m, nil
+	}
+	return args, nil
+}
+
+func unmarshalRunnerArgs[In any](args map[string]any) (In, error) {
+	var in In
+	if len(args) == 0 {
+		return in, nil
+	}
+	data, err := json.Marshal(args)
+	if err != nil {
+		return in, fmt.Errorf("failed to encode tool arguments: %w", err)
+	}
+	if err := json.Unmarshal(data, &in); err != nil {
+		return in, fmt.Errorf("failed to decode arguments into target parameter schema: %w", err)
+	}
+	return in, nil
+}
+
 // buildToolDispatcher builds the internal dispatcher mapping tool names to their execution runners.
 func buildToolDispatcher(client *autotask.Client, mapper *services.MappingCache, picklist *services.PicklistCache) map[string]ToolRunner {
 	return map[string]ToolRunner{
 		// Connection
-		"autotask_test_connection": makeRunner(testConnectionHandler(client)),
+		toolTestConnection: makeRunner(testConnectionHandler(client)),
 
 		// Picklists and metadata
-		"autotask_list_queues":            makeRunner(listQueuesHandler(picklist)),
-		"autotask_list_ticket_statuses":   makeRunner(listTicketStatusesHandler(picklist)),
-		"autotask_list_ticket_priorities": makeRunner(listTicketPrioritiesHandler(picklist)),
-		"autotask_get_field_info":         makeRunner(getFieldInfoHandler(picklist)),
+		toolListQueues:           makeRunner(listQueuesHandler(picklist)),
+		toolListTicketStatuses:   makeRunner(listTicketStatusesHandler(picklist)),
+		toolListTicketPriorities: makeRunner(listTicketPrioritiesHandler(picklist)),
+		toolGetFieldInfo:         makeRunner(getFieldInfoHandler(picklist)),
 
 		// Tickets
-		"autotask_search_tickets":     makeRunner(searchTicketsHandler(client, mapper)),
-		"autotask_get_ticket_details": makeRunner(getTicketDetailsHandler(client, mapper)),
-		"autotask_create_ticket":      makeRunner(createTicketHandler(client)),
-		"autotask_update_ticket":      makeRunner(updateTicketHandler(client)),
+		toolSearchTickets:    makeRunner(searchTicketsHandler(client, mapper)),
+		toolGetTicketDetails: makeRunner(getTicketDetailsHandler(client, mapper)),
+		toolCreateTicket:     makeRunner(createTicketHandler(client)),
+		toolUpdateTicket:     makeRunner(updateTicketHandler(client)),
 
 		// Companies
-		"autotask_search_companies": makeRunner(searchCompaniesHandler(client, mapper)),
-		"autotask_create_company":   makeRunner(createCompanyHandler(client)),
-		"autotask_update_company":   makeRunner(updateCompanyHandler(client)),
+		toolSearchCompanies: makeRunner(searchCompaniesHandler(client, mapper)),
+		toolCreateCompany:   makeRunner(createCompanyHandler(client)),
+		toolUpdateCompany:   makeRunner(updateCompanyHandler(client)),
 
 		// Contacts
-		"autotask_search_contacts": makeRunner(searchContactsHandler(client, mapper)),
-		"autotask_create_contact":  makeRunner(createContactHandler(client)),
+		toolSearchContacts: makeRunner(searchContactsHandler(client, mapper)),
+		toolCreateContact:  makeRunner(createContactHandler(client)),
 
 		// Projects
-		"autotask_search_projects": makeRunner(searchProjectsHandler(client, mapper)),
-		"autotask_create_project":  makeRunner(createProjectHandler(client)),
+		toolSearchProjects: makeRunner(searchProjectsHandler(client, mapper)),
+		toolCreateProject:  makeRunner(createProjectHandler(client)),
 
 		// Tasks
-		"autotask_search_tasks": makeRunner(searchTasksHandler(client, mapper)),
-		"autotask_create_task":  makeRunner(createTaskHandler(client)),
+		toolSearchTasks: makeRunner(searchTasksHandler(client, mapper)),
+		toolCreateTask:  makeRunner(createTaskHandler(client)),
 
 		// Time entries
-		"autotask_search_time_entries": makeRunner(searchTimeEntriesHandler(client, mapper)),
-		"autotask_create_time_entry":   makeRunner(createTimeEntryHandler(client)),
+		toolSearchTimeEntries: makeRunner(searchTimeEntriesHandler(client, mapper)),
+		toolCreateTimeEntry:   makeRunner(createTimeEntryHandler(client)),
 
 		// Resources
-		"autotask_search_resources": makeRunner(searchResourcesHandler(client)),
+		toolSearchResources: makeRunner(searchResourcesHandler(client)),
 
 		// Configuration items
-		"autotask_search_configuration_items": makeRunner(searchConfigurationItemsHandler(client, mapper)),
+		toolSearchConfigurationItems: makeRunner(searchConfigurationItemsHandler(client, mapper)),
 
 		// Company, ticket, and project notes
-		"autotask_get_ticket_note":      makeRunner(getTicketNoteHandler(client)),
-		"autotask_search_ticket_notes":  makeRunner(searchTicketNotesHandler(client)),
-		"autotask_create_ticket_note":   makeRunner(createTicketNoteHandler(client)),
-		"autotask_get_project_note":     makeRunner(getProjectNoteHandler(client)),
-		"autotask_search_project_notes": makeRunner(searchProjectNotesHandler(client)),
-		"autotask_create_project_note":  makeRunner(createProjectNoteHandler(client)),
-		"autotask_get_company_note":     makeRunner(getCompanyNoteHandler(client)),
-		"autotask_search_company_notes": makeRunner(searchCompanyNotesHandler(client)),
-		"autotask_create_company_note":  makeRunner(createCompanyNoteHandler(client)),
+		toolGetTicketNote:      makeRunner(getTicketNoteHandler(client)),
+		toolSearchTicketNotes:  makeRunner(searchTicketNotesHandler(client)),
+		toolCreateTicketNote:   makeRunner(createTicketNoteHandler(client)),
+		toolGetProjectNote:     makeRunner(getProjectNoteHandler(client)),
+		toolSearchProjectNotes: makeRunner(searchProjectNotesHandler(client)),
+		toolCreateProjectNote:  makeRunner(createProjectNoteHandler(client)),
+		toolGetCompanyNote:     makeRunner(getCompanyNoteHandler(client)),
+		toolSearchCompanyNotes: makeRunner(searchCompanyNotesHandler(client)),
+		toolCreateCompanyNote:  makeRunner(createCompanyNoteHandler(client)),
 
 		// Ticket attachments
-		"autotask_get_ticket_attachment":     makeRunner(getTicketAttachmentHandler(client)),
-		"autotask_search_ticket_attachments": makeRunner(searchTicketAttachmentsHandler(client)),
+		toolGetTicketAttachment:     makeRunner(getTicketAttachmentHandler(client)),
+		toolSearchTicketAttachments: makeRunner(searchTicketAttachmentsHandler(client)),
 
 		// Billing
-		"autotask_get_billing_item":                    makeRunner(getBillingItemHandler(client)),
-		"autotask_search_billing_items":                makeRunner(searchBillingItemsHandler(client, mapper)),
-		"autotask_search_billing_item_approval_levels": makeRunner(searchBillingItemApprovalLevelsHandler(client)),
+		toolGetBillingItem:                  makeRunner(getBillingItemHandler(client)),
+		toolSearchBillingItems:              makeRunner(searchBillingItemsHandler(client, mapper)),
+		toolSearchBillingItemApprovalLevels: makeRunner(searchBillingItemApprovalLevelsHandler(client)),
 
 		// Expenses
-		"autotask_get_expense_report":     makeRunner(getExpenseReportHandler(client)),
-		"autotask_search_expense_reports": makeRunner(searchExpenseReportsHandler(client)),
-		"autotask_create_expense_report":  makeRunner(createExpenseReportHandler(client)),
-		"autotask_create_expense_item":    makeRunner(createExpenseItemHandler(client)),
+		toolGetExpenseReport:     makeRunner(getExpenseReportHandler(client)),
+		toolSearchExpenseReports: makeRunner(searchExpenseReportsHandler(client)),
+		toolCreateExpenseReport:  makeRunner(createExpenseReportHandler(client)),
+		toolCreateExpenseItem:    makeRunner(createExpenseItemHandler(client)),
 
 		// Sales
-		"autotask_get_product":            makeRunner(getProductHandler(client)),
-		"autotask_search_products":        makeRunner(searchProductsHandler(client)),
-		"autotask_get_service":            makeRunner(getServiceHandler(client)),
-		"autotask_search_services":        makeRunner(searchServicesHandler(client)),
-		"autotask_get_service_bundle":     makeRunner(getServiceBundleHandler(client)),
-		"autotask_search_service_bundles": makeRunner(searchServiceBundlesHandler(client)),
+		toolGetProduct:           makeRunner(getProductHandler(client)),
+		toolSearchProducts:       makeRunner(searchProductsHandler(client)),
+		toolGetService:           makeRunner(getServiceHandler(client)),
+		toolSearchServices:       makeRunner(searchServicesHandler(client)),
+		toolGetServiceBundle:     makeRunner(getServiceBundleHandler(client)),
+		toolSearchServiceBundles: makeRunner(searchServiceBundlesHandler(client)),
 
 		// Financial
-		"autotask_get_quote":            makeRunner(getQuoteHandler(client)),
-		"autotask_search_quotes":        makeRunner(searchQuotesHandler(client)),
-		"autotask_create_quote":         makeRunner(createQuoteHandler(client)),
-		"autotask_get_quote_item":       makeRunner(getQuoteItemHandler(client)),
-		"autotask_search_quote_items":   makeRunner(searchQuoteItemsHandler(client)),
-		"autotask_create_quote_item":    makeRunner(createQuoteItemHandler(client)),
-		"autotask_update_quote_item":    makeRunner(updateQuoteItemHandler(client)),
-		"autotask_delete_quote_item":    makeRunner(deleteQuoteItemHandler(client)),
-		"autotask_get_opportunity":      makeRunner(getOpportunityHandler(client)),
-		"autotask_search_opportunities": makeRunner(searchOpportunitiesHandler(client)),
-		"autotask_create_opportunity":   makeRunner(createOpportunityHandler(client)),
-		"autotask_search_contracts":     makeRunner(searchContractsHandler(client, mapper)),
-		"autotask_search_invoices":      makeRunner(searchInvoicesHandler(client)),
+		toolGetQuote:            makeRunner(getQuoteHandler(client)),
+		toolSearchQuotes:        makeRunner(searchQuotesHandler(client)),
+		toolCreateQuote:         makeRunner(createQuoteHandler(client)),
+		toolGetQuoteItem:        makeRunner(getQuoteItemHandler(client)),
+		toolSearchQuoteItems:    makeRunner(searchQuoteItemsHandler(client)),
+		toolCreateQuoteItem:     makeRunner(createQuoteItemHandler(client)),
+		toolUpdateQuoteItem:     makeRunner(updateQuoteItemHandler(client)),
+		toolDeleteQuoteItem:     makeRunner(deleteQuoteItemHandler(client)),
+		toolGetOpportunity:      makeRunner(getOpportunityHandler(client)),
+		toolSearchOpportunities: makeRunner(searchOpportunitiesHandler(client)),
+		toolCreateOpportunity:   makeRunner(createOpportunityHandler(client)),
+		toolSearchContracts:     makeRunner(searchContractsHandler(client, mapper)),
+		toolSearchInvoices:      makeRunner(searchInvoicesHandler(client)),
 	}
 }
 
@@ -357,24 +375,31 @@ func init() {
 	}
 }
 
+const (
+	toolListCategories    = "autotask_list_categories"
+	toolListCategoryTools = "autotask_list_category_tools"
+	toolExecuteTool       = "autotask_execute_tool"
+	toolRouter            = "autotask_router"
+)
+
 // RegisterLazyTools registers the 4 lazy-loading meta-tools with the server.
 func RegisterLazyTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache, picklist *services.PicklistCache) {
 	dispatcher := buildToolDispatcher(client, mapper, picklist)
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_list_categories",
+		Name:        toolListCategories,
 		Description: "Enumerate the Autotask tool categories (tickets, companies, projects, financial, and more), each with its description, member tool count, and tool names. Start here in lazy-loading mode to discover which domains exist, then call autotask_list_category_tools to see the tools within one category. Reads the static in-process registry with no Autotask API call. Read-only.",
 		Annotations: localReadTool("List categories"),
 	}, listCategoriesHandler())
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_list_category_tools",
+		Name:        toolListCategoryTools,
 		Description: "List the tool names and one-line descriptions belonging to one category, matched case-insensitively by category name. Call autotask_list_categories first to obtain valid category names; to invoke a listed tool use autotask_execute_tool or call it directly through the MCP client. Requires category and reads the static in-process registry with no Autotask API call. Read-only.",
 		Annotations: localReadTool("List category tools"),
 	}, listCategoryToolsHandler())
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_execute_tool",
+		Name:        toolExecuteTool,
 		Description: "Execute a named Autotask tool with arguments in lazy-loading mode. Dispatches the tool call to the internal handler and returns the execution result. Use autotask_router or autotask_list_category_tools to discover tool names and argument schemas. Requires toolName. Open world.",
 		// This proxy can dispatch create/update/delete tools, so it must advertise
 		// itself as destructive: a host that gates confirmation on DestructiveHint
@@ -383,7 +408,7 @@ func RegisterLazyTools(s *mcp.Server, client *autotask.Client, mapper *services.
 	}, executeToolHandler(dispatcher))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_router",
+		Name:        toolRouter,
 		Description: "Map a natural-language intent to the single best-matching Autotask tool by keyword, returning the suggested tool name and its description. Use this when you know what you want to do but not the tool name; for a structured browse by domain use autotask_list_categories and autotask_list_category_tools instead. Requires intent and falls back to autotask_list_categories when nothing matches. Read-only.",
 		Annotations: localReadTool("Route intent"),
 	}, routerHandler())
@@ -405,7 +430,7 @@ func listCategoryToolsHandler() func(ctx context.Context, req *mcp.CallToolReque
 			// Try case-insensitive match.
 			lower := strings.ToLower(in.Category)
 			for k, v := range ToolCategories {
-				if strings.ToLower(k) == lower {
+				if strings.EqualFold(k, lower) {
 					cat = v
 					categoryName = k
 					ok = true
@@ -438,7 +463,7 @@ func listCategoryToolsHandler() func(ctx context.Context, req *mcp.CallToolReque
 func executeToolHandler(dispatcher map[string]ToolRunner) func(ctx context.Context, req *mcp.CallToolRequest, in ExecuteToolInput) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in ExecuteToolInput) (*mcp.CallToolResult, any, error) {
 		if in.ToolName == "" {
-			return nil, nil, fmt.Errorf("toolName is required")
+			return nil, nil, errors.New("toolName is required")
 		}
 
 		runner, ok := dispatcher[in.ToolName]
@@ -454,7 +479,7 @@ func executeToolHandler(dispatcher map[string]ToolRunner) func(ctx context.Conte
 func routerHandler() func(ctx context.Context, req *mcp.CallToolRequest, in RouterInput) (*mcp.CallToolResult, RouterOut, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in RouterInput) (*mcp.CallToolResult, RouterOut, error) {
 		if in.Intent == "" {
-			return nil, RouterOut{}, fmt.Errorf("intent is required")
+			return nil, RouterOut{}, errors.New("intent is required")
 		}
 
 		intentLower := strings.ToLower(in.Intent)
@@ -475,7 +500,7 @@ func routerHandler() func(ctx context.Context, req *mcp.CallToolRequest, in Rout
 		}
 
 		if suggestedTool == "" {
-			suggestedTool = "autotask_list_categories"
+			suggestedTool = toolListCategories
 			description = "No specific match found. Use autotask_list_categories to browse available tools."
 		}
 

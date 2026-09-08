@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -20,7 +19,7 @@ func TestRegisterExpenseTools_NoPanic(t *testing.T) {
 // TestGetExpenseReportHandler_NotFound tests that a missing report returns an error result over wire.
 func TestGetExpenseReportHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_expense_report",
@@ -39,7 +38,7 @@ func TestGetExpenseReportHandler_NotFound(t *testing.T) {
 // TestSearchExpenseReportsHandler_NoResults tests the empty-result case over wire.
 func TestSearchExpenseReportsHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_expense_reports",
@@ -61,7 +60,7 @@ func TestSearchExpenseReportsHandler_NoResults(t *testing.T) {
 // TestCreateExpenseReportHandler_InvalidDate tests that an invalid date returns an error result over wire.
 func TestCreateExpenseReportHandler_InvalidDate(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_expense_report",
@@ -82,7 +81,7 @@ func TestCreateExpenseReportHandler_InvalidDate(t *testing.T) {
 // TestCreateExpenseReportHandler_Success tests creating an expense report over wire.
 func TestCreateExpenseReportHandler_Success(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_expense_report",
@@ -109,7 +108,7 @@ func TestCreateExpenseReportHandler_Success(t *testing.T) {
 // TestCreateExpenseItemHandler_InvalidDate tests that an invalid expense date returns an error result over wire.
 func TestCreateExpenseItemHandler_InvalidDate(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_expense_item",
@@ -132,7 +131,7 @@ func TestCreateExpenseItemHandler_InvalidDate(t *testing.T) {
 // TestCreateExpenseItemHandler_Success tests creating an expense item over wire.
 func TestCreateExpenseItemHandler_Success(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_expense_item",

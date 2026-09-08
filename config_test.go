@@ -132,7 +132,7 @@ func TestLoadConfig_FileConfig(t *testing.T) {
 	}
 
 	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
-	if err := saveFileConfig(cfgPath, fc); err != nil {
+	if err := saveFileConfig(cfgPath, &fc); err != nil {
 		t.Fatalf("saveFileConfig: %v", err)
 	}
 
@@ -171,7 +171,7 @@ func TestLoadConfig_EnvOverridesFile(t *testing.T) {
 		Secret:   "filesecret",
 	}
 	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
-	if err := saveFileConfig(cfgPath, fc); err != nil {
+	if err := saveFileConfig(cfgPath, &fc); err != nil {
 		t.Fatalf("saveFileConfig: %v", err)
 	}
 
@@ -195,7 +195,7 @@ func TestLoadConfig_GatewayClientCacheSizeFile(t *testing.T) {
 	size := 42
 	fc := FileConfig{Username: "u", GatewayClientCacheSize: &size}
 	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
-	if err := saveFileConfig(cfgPath, fc); err != nil {
+	if err := saveFileConfig(cfgPath, &fc); err != nil {
 		t.Fatalf("saveFileConfig: %v", err)
 	}
 
@@ -214,7 +214,7 @@ func TestLoadConfig_GatewayClientCacheSizeFile(t *testing.T) {
 func TestSetGetConfigField_GatewayClientCacheSize(t *testing.T) {
 	var fc FileConfig
 	// Unset returns empty like every other pointer-backed key.
-	if val, err := getConfigField(fc, "gateway_client_cache_size"); err != nil || val != "" {
+	if val, err := getConfigField(&fc, "gateway_client_cache_size"); err != nil || val != "" {
 		t.Errorf("unset gateway_client_cache_size: got %q err %v, want empty", val, err)
 	}
 	// A valid value round-trips through set then get.
@@ -224,7 +224,7 @@ func TestSetGetConfigField_GatewayClientCacheSize(t *testing.T) {
 	if fc.GatewayClientCacheSize == nil || *fc.GatewayClientCacheSize != 64 {
 		t.Fatalf("GatewayClientCacheSize = %v, want 64", fc.GatewayClientCacheSize)
 	}
-	if val, err := getConfigField(fc, "gateway_client_cache_size"); err != nil || val != "64" {
+	if val, err := getConfigField(&fc, "gateway_client_cache_size"); err != nil || val != "64" {
 		t.Errorf("get after set: got %q err %v, want 64", val, err)
 	}
 	// Non-positive and unparseable values are rejected without mutating the field.
@@ -255,7 +255,7 @@ func TestSaveFileConfig_Permissions(t *testing.T) {
 	fc := FileConfig{
 		Username: "secureuser",
 	}
-	if err := saveFileConfig(cfgPath, fc); err != nil {
+	if err := saveFileConfig(cfgPath, &fc); err != nil {
 		t.Fatalf("saveFileConfig: %v", err)
 	}
 
@@ -265,7 +265,7 @@ func TestSaveFileConfig_Permissions(t *testing.T) {
 	}
 
 	perm := info.Mode().Perm()
-	if perm != 0600 {
+	if perm != 0o600 {
 		t.Errorf("file permissions = 0%o, want 0600", perm)
 	}
 }
@@ -279,6 +279,19 @@ func TestHandleConfigCommand(t *testing.T) {
 		t.Errorf("config path failed: %v", err)
 	}
 
+	testConfigSetAndGet(t)
+
+	// 4. Unset command
+	if err := handleConfigCommand([]string{"unset", "http_port"}); err != nil {
+		t.Errorf("config unset http_port failed: %v", err)
+	}
+
+	testConfigBooleanHandling(t)
+	verifySavedFileConfig(t)
+}
+
+func testConfigSetAndGet(t *testing.T) {
+	t.Helper()
 	// 2. Set commands
 	if err := handleConfigCommand([]string{"set", "username", "admin@corp.com"}); err != nil {
 		t.Errorf("config set username failed: %v", err)
@@ -297,12 +310,10 @@ func TestHandleConfigCommand(t *testing.T) {
 	if err := handleConfigCommand([]string{"get", "username"}); err != nil {
 		t.Errorf("config get username failed: %v", err)
 	}
+}
 
-	// 4. Unset command
-	if err := handleConfigCommand([]string{"unset", "http_port"}); err != nil {
-		t.Errorf("config unset http_port failed: %v", err)
-	}
-
+func testConfigBooleanHandling(t *testing.T) {
+	t.Helper()
 	// Verify boolean handling
 	if err := handleConfigCommand([]string{"set", "lazy_loading", "true"}); err != nil {
 		t.Errorf("config set lazy_loading true failed: %v", err)
@@ -310,7 +321,10 @@ func TestHandleConfigCommand(t *testing.T) {
 	if err := handleConfigCommand([]string{"set", "lazy_loading", "invalid_bool"}); err == nil {
 		t.Errorf("expected error setting invalid boolean value, got nil")
 	}
+}
 
+func verifySavedFileConfig(t *testing.T) {
+	t.Helper()
 	// Verify loaded file config
 	fc, loaded, err := loadFileConfig("")
 	if err != nil || !loaded {
@@ -354,7 +368,7 @@ func TestGetConfigField_UnsetPointerKeys(t *testing.T) {
 	fc := FileConfig{Username: "alice"}
 
 	for _, key := range []string{"http_port", "httpport", "lazy_loading", "lazyloading"} {
-		val, err := getConfigField(fc, key)
+		val, err := getConfigField(&fc, key)
 		if err != nil {
 			t.Errorf("getConfigField(%q) unset: unexpected error %v", key, err)
 		}
@@ -364,14 +378,14 @@ func TestGetConfigField_UnsetPointerKeys(t *testing.T) {
 	}
 
 	// A genuinely unknown key must still error.
-	if _, err := getConfigField(fc, "bogus"); err == nil {
+	if _, err := getConfigField(&fc, "bogus"); err == nil {
 		t.Error("expected error for unknown key 'bogus'")
 	}
 
 	// A set pointer value must still round-trip.
 	port := 9090
 	fc.HTTPPort = &port
-	if val, err := getConfigField(fc, "http_port"); err != nil || val != "9090" {
+	if val, err := getConfigField(&fc, "http_port"); err != nil || val != "9090" {
 		t.Errorf("getConfigField(http_port) set: got %q, err %v; want 9090", val, err)
 	}
 }
@@ -430,10 +444,10 @@ func TestLoadFileConfig_RefusesInsecurePerms(t *testing.T) {
 	}
 	tempDir := t.TempDir()
 	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
-	if err := saveFileConfig(cfgPath, FileConfig{Username: "u"}); err != nil {
+	if err := saveFileConfig(cfgPath, &FileConfig{Username: "u"}); err != nil {
 		t.Fatalf("saveFileConfig: %v", err)
 	}
-	if err := os.Chmod(cfgPath, 0644); err != nil {
+	if err := os.Chmod(cfgPath, 0o644); err != nil { //nolint:gosec // test fixture permissions, not production
 		t.Fatalf("chmod: %v", err)
 	}
 
@@ -459,7 +473,7 @@ func TestLoadConfig_IgnoresBadFileAPIURL(t *testing.T) {
 	clearAllConfigEnv(t)
 
 	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
-	if err := saveFileConfig(cfgPath, FileConfig{Username: "fileuser", APIURL: "http://evil.example.com"}); err != nil {
+	if err := saveFileConfig(cfgPath, &FileConfig{Username: "fileuser", APIURL: "http://evil.example.com"}); err != nil {
 		t.Fatalf("saveFileConfig: %v", err)
 	}
 
@@ -512,7 +526,7 @@ func TestLoadFileConfig_AcceptsValidAPIURL(t *testing.T) {
 	tempDir := t.TempDir()
 	cfgPath := filepath.Join(tempDir, "autotask-mcp", "config.json")
 	const apiURL = "https://webservices19.autotask.net/ATServicesRest"
-	if err := saveFileConfig(cfgPath, FileConfig{Username: "u", APIURL: apiURL}); err != nil {
+	if err := saveFileConfig(cfgPath, &FileConfig{Username: "u", APIURL: apiURL}); err != nil {
 		t.Fatalf("saveFileConfig: %v", err)
 	}
 
@@ -536,15 +550,15 @@ func TestSaveFileConfig_TightensDirPermissions(t *testing.T) {
 	}
 	tempDir := t.TempDir()
 	dir := filepath.Join(tempDir, "autotask-mcp")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // test fixture permissions, not production
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.Chmod(dir, 0777); err != nil {
+	if err := os.Chmod(dir, 0o777); err != nil { //nolint:gosec // test fixture permissions, not production
 		t.Fatalf("chmod: %v", err)
 	}
 
 	cfgPath := filepath.Join(dir, "config.json")
-	if err := saveFileConfig(cfgPath, FileConfig{Username: "u"}); err != nil {
+	if err := saveFileConfig(cfgPath, &FileConfig{Username: "u"}); err != nil {
 		t.Fatalf("saveFileConfig: %v", err)
 	}
 
@@ -552,7 +566,7 @@ func TestSaveFileConfig_TightensDirPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat dir: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0700 {
+	if perm := info.Mode().Perm(); perm != 0o700 {
 		t.Errorf("config dir permissions = %#o, want 0700", perm)
 	}
 }

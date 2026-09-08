@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -31,12 +32,7 @@ func (r *closeRecorder) count() int {
 func (r *closeRecorder) has(tc *tenantClient) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, c := range r.closed {
-		if c == tc {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(r.closed, tc)
 }
 
 // newTestCache returns a cache whose closes are recorded instead of touching a real client.
@@ -79,7 +75,7 @@ func TestCredentialKey(t *testing.T) {
 	}
 }
 
-func TestCloseTenant_NilSafe(t *testing.T) {
+func TestCloseTenant_NilSafe(t *testing.T) { //nolint:unparam // t is required by the go test runner signature
 	// The production closer must not panic on a nil tenant or a tenant with no client;
 	// the cache's fake closeFn never exercises these branches.
 	closeTenant(nil)
@@ -248,7 +244,7 @@ func TestClientCache_ConcurrentSameKeyDedupes(t *testing.T) {
 	shared := &tenantClient{}
 	results := make([]*tenantClient, n)
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -289,7 +285,7 @@ func TestClientCache_ConcurrentMixedKeys(t *testing.T) {
 	const capacity = 8
 	c, _ := newTestCache(capacity)
 	var wg sync.WaitGroup
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

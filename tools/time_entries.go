@@ -31,16 +31,21 @@ type SearchTimeEntriesInput struct {
 	MaxResults       int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
+const (
+	toolCreateTimeEntry   = "autotask_create_time_entry"
+	toolSearchTimeEntries = "autotask_search_time_entries"
+)
+
 // RegisterTimeEntryTools registers all time entry-related MCP tools with the server.
 func RegisterTimeEntryTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_time_entry",
+		Name:        toolCreateTimeEntry,
 		Description: "Log hours worked by a resource on a given date, with summary notes and optional attachment to a ticket, a billing code, and start/end times. Requires resourceID, dateWorked, hoursWorked, and summaryNotes; returns the created entry including its new ID. To find existing entries use autotask_search_time_entries instead. Writes to Autotask.",
 		Annotations: createTool("Create time entry"),
 	}, createTimeEntryHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_time_entries",
+		Name:        toolSearchTimeEntries,
 		Description: "Find logged time entries by resource, ticket, or date-worked range, returning a compact summary of matching records (up to maxResults, default 25, max 500). Use this to review or locate recorded time; to log new time use autotask_create_time_entry instead. Read-only.",
 		Annotations: readOnlyTool("Search time entries"),
 	}, searchTimeEntriesHandler(client, mapper))
@@ -49,40 +54,9 @@ func RegisterTimeEntryTools(s *mcp.Server, client *autotask.Client, mapper *serv
 // createTimeEntryHandler returns a handler that creates a new time entry.
 func createTimeEntryHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateTimeEntryInput) (*mcp.CallToolResult, map[string]any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateTimeEntryInput) (*mcp.CallToolResult, map[string]any, error) {
-		dateWorked, err := parseDate(in.DateWorked)
+		entry, err := buildTimeEntry(&in)
 		if err != nil {
 			return nil, nil, err
-		}
-
-		entry := &entities.TimeEntry{
-			ResourceID:   autotask.Set(in.ResourceID),
-			DateWorked:   autotask.Set(dateWorked),
-			HoursWorked:  autotask.Set(in.HoursWorked),
-			SummaryNotes: autotask.Set(in.SummaryNotes),
-		}
-
-		if in.TicketID != 0 {
-			entry.TicketID = autotask.Set(in.TicketID)
-		}
-		if in.BillingCodeID != 0 {
-			entry.BillingCodeID = autotask.Set(in.BillingCodeID)
-		}
-		if in.InternalNotes != "" {
-			entry.InternalNotes = autotask.Set(in.InternalNotes)
-		}
-		if in.StartDateTime != "" {
-			t, err := parseDate(in.StartDateTime)
-			if err != nil {
-				return nil, nil, err
-			}
-			entry.StartDateTime = autotask.Set(t)
-		}
-		if in.EndDateTime != "" {
-			t, err := parseDate(in.EndDateTime)
-			if err != nil {
-				return nil, nil, err
-			}
-			entry.EndDateTime = autotask.Set(t)
 		}
 
 		created, err := autotask.Create[entities.TimeEntry](ctx, client, entry)
@@ -99,10 +73,50 @@ func createTimeEntryHandler(client *autotask.Client) func(ctx context.Context, r
 	}
 }
 
+func buildTimeEntry(in *CreateTimeEntryInput) (*entities.TimeEntry, error) {
+	dateWorked, err := parseDate(in.DateWorked)
+	if err != nil {
+		return nil, err
+	}
+
+	entry := &entities.TimeEntry{
+		ResourceID:   autotask.Set(in.ResourceID),
+		DateWorked:   autotask.Set(dateWorked),
+		HoursWorked:  autotask.Set(in.HoursWorked),
+		SummaryNotes: autotask.Set(in.SummaryNotes),
+	}
+
+	if in.TicketID != 0 {
+		entry.TicketID = autotask.Set(in.TicketID)
+	}
+	if in.BillingCodeID != 0 {
+		entry.BillingCodeID = autotask.Set(in.BillingCodeID)
+	}
+	if in.InternalNotes != "" {
+		entry.InternalNotes = autotask.Set(in.InternalNotes)
+	}
+	if in.StartDateTime != "" {
+		t, err := parseDate(in.StartDateTime)
+		if err != nil {
+			return nil, err
+		}
+		entry.StartDateTime = autotask.Set(t)
+	}
+	if in.EndDateTime != "" {
+		t, err := parseDate(in.EndDateTime)
+		if err != nil {
+			return nil, err
+		}
+		entry.EndDateTime = autotask.Set(t)
+	}
+
+	return entry, nil
+}
+
 // searchTimeEntriesHandler returns a handler that searches time entries using the provided filters.
 func searchTimeEntriesHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTimeEntriesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTimeEntriesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
@@ -133,6 +147,6 @@ func searchTimeEntriesHandler(client *autotask.Client, mapper *services.MappingC
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_time_entries", maxResults)
+		return searchResult(ctx, mapper, maps, toolSearchTimeEntries, maxResults)
 	}
 }

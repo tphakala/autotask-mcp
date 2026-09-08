@@ -13,6 +13,14 @@ import (
 	autotask "github.com/tphakala/go-autotask"
 )
 
+const (
+	defaultResultLimit   = 25
+	maxResultLimitSmall  = 100
+	maxResultLimitMedium = 200
+	maxResultLimitLarge  = 500
+	maxResultsHint       = "Maximum result limit reached. Use narrower search filters to find specific records."
+)
+
 // RegisterAll registers every tool category with the MCP server.
 func RegisterAll(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache, picklist *services.PicklistCache) {
 	RegisterConnectionTools(s, client)
@@ -197,8 +205,7 @@ func collectBoundedChildRaw(seq iter.Seq2[map[string]any, error], limit int) (it
 	items = make([]map[string]any, 0, max(limit, 0))
 	for m, iterErr := range seq {
 		if iterErr != nil {
-			var notFound *autotask.NotFoundError
-			if errors.As(iterErr, &notFound) {
+			if _, ok := errors.AsType[*autotask.NotFoundError](iterErr); ok {
 				return nil, false, nil
 			}
 			return nil, false, iterErr
@@ -231,7 +238,7 @@ func defaultMaxResults(requested, defaultVal, maxVal int) int {
 
 // parseDate parses a date string in YYYY-MM-DD or RFC3339 format.
 func parseDate(s string) (time.Time, error) {
-	t, err := time.Parse("2006-01-02", s)
+	t, err := time.Parse(time.DateOnly, s)
 	if err == nil {
 		return t, nil
 	}

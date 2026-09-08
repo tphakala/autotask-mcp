@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -43,7 +44,16 @@ type Config struct {
 
 // defaultGatewayClientCacheSize is the default LRU bound on per-tenant clients in
 // gateway auth mode. Override with AUTOTASK_GATEWAY_CLIENT_CACHE_SIZE.
-const defaultGatewayClientCacheSize = 128
+const (
+	defaultGatewayClientCacheSize = 128
+	defaultHTTPPort               = 8080
+	configFilePerm                = 0o600
+	configDirPerm                 = 0o700
+	authModeEnv                   = "env"
+	keyTransport                  = "transport"
+	maskMinLength                 = 4
+	minSetArgs                    = 2
+)
 
 // FileConfig defines the JSON structure for the on-disk config file (~/.config/autotask-mcp/config.json).
 type FileConfig struct {
@@ -78,7 +88,7 @@ func defaultConfigPath() string {
 // meaningful only on unix: Windows synthesizes permission bits, so callers gate
 // this check on the platform.
 func hasInsecurePerm(perm os.FileMode) bool {
-	return perm&0077 != 0
+	return perm&0o077 != 0
 }
 
 // validateFileAPIURL constrains an api_url that originates in the on-disk config
@@ -96,14 +106,14 @@ func hasInsecurePerm(perm os.FileMode) bool {
 func validateFileAPIURL(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("api_url is not a valid URL")
+		return errors.New("api_url is not a valid URL")
 	}
 	if u.Scheme != "https" {
 		return fmt.Errorf("api_url must use https, got scheme %q", u.Scheme)
 	}
 	host := strings.ToLower(u.Hostname())
 	if host == "" {
-		return fmt.Errorf("api_url has no host")
+		return errors.New("api_url has no host")
 	}
 	// Match the domain itself or any subdomain, but not look-alikes such as
 	// "evil-autotask.net" or "autotask.net.evil.com" (the leading dot is required).
@@ -123,7 +133,7 @@ func loadFileConfig(path string) (FileConfig, bool, error) {
 	// on the open descriptor (not re-resolving the path) closes the TOCTOU window in
 	// which the path could be swapped for a symlink to an insecure file between the
 	// check and the read.
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // G304: path is the operator's own config file (default or explicitly passed), not attacker-supplied input
 	if os.IsNotExist(err) {
 		return FileConfig{}, false, nil
 	}
@@ -163,24 +173,24 @@ func loadFileConfig(path string) (FileConfig, bool, error) {
 }
 
 // saveFileConfig saves the FileConfig struct to disk with 0600 permissions and 0700 dir permissions.
-func saveFileConfig(path string, fc FileConfig) error {
+func saveFileConfig(path string, fc *FileConfig) error {
 	if path == "" {
 		path = defaultConfigPath()
 	}
 
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, configDirPerm); err != nil {
 		return fmt.Errorf("creating config directory %s: %w", dir, err)
 	}
 	// MkdirAll does not tighten a directory that already exists more permissively,
 	// so chmod it explicitly: the config file it holds carries credentials.
 	if runtime.GOOS != "windows" {
-		if err := os.Chmod(dir, 0700); err != nil {
+		if err := os.Chmod(dir, configDirPerm); err != nil { //nolint:gosec // G302: 0o700 is correct for a directory; the owner needs the execute bit to traverse it
 			return fmt.Errorf("securing config directory %s: %w", dir, err)
 		}
 	}
 
-	data, err := json.MarshalIndent(fc, "", "  ")
+	data, err := json.MarshalIndent(fc, "", "  ") //nolint:gosec // G117: persisting the Secret to the operator's own config file is the intended purpose of saveFileConfig
 	if err != nil {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
@@ -193,7 +203,7 @@ func saveFileConfig(path string, fc FileConfig) error {
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath) //nolint:errcheck // clean up if rename fails
 
-	if err := tmpFile.Chmod(0600); err != nil {
+	if err := tmpFile.Chmod(configFilePerm); err != nil {
 		_ = tmpFile.Close()
 		return fmt.Errorf("setting secure permissions on temp file: %w", err)
 	}
@@ -241,9 +251,9 @@ func loadConfig() Config {
 		ServerName:             "autotask-mcp",
 		Transport:              "stdio",
 		HTTPHost:               "0.0.0.0",
-		HTTPPort:               8080,
+		HTTPPort:               defaultHTTPPort,
 		LogLevel:               "info",
-		AuthMode:               "env",
+		AuthMode:               authModeEnv,
 		LazyLoading:            false,
 		GatewayClientCacheSize: defaultGatewayClientCacheSize,
 	}
@@ -251,12 +261,17 @@ func loadConfig() Config {
 		cfg.ConfigFile = cfgPath
 	}
 
-	applyFileConfig(&cfg, fileCfg)
+	applyFileConfig(&cfg, &fileCfg)
 	applyEnvOverrides(&cfg)
 	return cfg
 }
 
-func applyFileConfig(cfg *Config, fileCfg FileConfig) {
+func applyFileConfig(cfg *Config, fileCfg *FileConfig) {
+	applyFileAuthConfig(cfg, fileCfg)
+	applyFileServerConfig(cfg, fileCfg)
+}
+
+func applyFileAuthConfig(cfg *Config, fileCfg *FileConfig) {
 	if fileCfg.Username != "" {
 		cfg.Username = fileCfg.Username
 	}
@@ -269,6 +284,12 @@ func applyFileConfig(cfg *Config, fileCfg FileConfig) {
 	if fileCfg.APIURL != "" {
 		cfg.APIURL = fileCfg.APIURL
 	}
+	if fileCfg.AuthMode != "" {
+		cfg.AuthMode = fileCfg.AuthMode
+	}
+}
+
+func applyFileServerConfig(cfg *Config, fileCfg *FileConfig) {
 	if fileCfg.ServerName != "" {
 		cfg.ServerName = fileCfg.ServerName
 	}
@@ -284,9 +305,6 @@ func applyFileConfig(cfg *Config, fileCfg FileConfig) {
 	if fileCfg.LogLevel != "" {
 		cfg.LogLevel = fileCfg.LogLevel
 	}
-	if fileCfg.AuthMode != "" {
-		cfg.AuthMode = fileCfg.AuthMode
-	}
 	if fileCfg.LazyLoading != nil {
 		cfg.LazyLoading = *fileCfg.LazyLoading
 	}
@@ -296,6 +314,11 @@ func applyFileConfig(cfg *Config, fileCfg FileConfig) {
 }
 
 func applyEnvOverrides(cfg *Config) {
+	applyEnvAuthOverrides(cfg)
+	applyEnvServerOverrides(cfg)
+}
+
+func applyEnvAuthOverrides(cfg *Config) {
 	if v := os.Getenv("AUTOTASK_USERNAME"); v != "" {
 		cfg.Username = v
 	}
@@ -308,6 +331,12 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("AUTOTASK_API_URL"); v != "" {
 		cfg.APIURL = v
 	}
+	if v := os.Getenv("AUTH_MODE"); v != "" {
+		cfg.AuthMode = v
+	}
+}
+
+func applyEnvServerOverrides(cfg *Config) {
 	if v := os.Getenv("MCP_SERVER_NAME"); v != "" {
 		cfg.ServerName = v
 	}
@@ -325,11 +354,8 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		cfg.LogLevel = v
 	}
-	if v := os.Getenv("AUTH_MODE"); v != "" {
-		cfg.AuthMode = v
-	}
 	if v := os.Getenv("LAZY_LOADING"); v != "" {
-		cfg.LazyLoading = strings.ToLower(v) == "true" || v == "1"
+		cfg.LazyLoading = strings.EqualFold(v, "true") || v == "1"
 	}
 	if v := os.Getenv("AUTOTASK_GATEWAY_CLIENT_CACHE_SIZE"); v != "" {
 		// Only a positive size overrides the default; a zero, negative, or
@@ -345,16 +371,16 @@ func maskSecret(s string) string {
 		return ""
 	}
 	runes := []rune(s)
-	if len(runes) <= 4 {
+	if len(runes) <= maskMinLength {
 		return "****"
 	}
-	return string(runes[:2]) + strings.Repeat("*", len(runes)-4) + string(runes[len(runes)-2:])
+	return string(runes[:2]) + strings.Repeat("*", len(runes)-maskMinLength) + string(runes[len(runes)-2:])
 }
 
 // handleConfigCommand handles CLI subcommands for 'autotask-mcp config ...'.
 func handleConfigCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: autotask-mcp config <path|get|set|unset> [arguments...]")
+		return errors.New("usage: autotask-mcp config <path|get|set|unset> [arguments...]")
 	}
 
 	cfgPath := defaultConfigPath()
@@ -385,7 +411,7 @@ func handleConfigGet(cfgPath string, args []string) error {
 	}
 
 	if len(args) > 0 {
-		val, err := getConfigField(fc, args[0])
+		val, err := getConfigField(&fc, args[0])
 		if err != nil {
 			return err
 		}
@@ -399,7 +425,7 @@ func handleConfigGet(cfgPath string, args []string) error {
 	if display.Secret != "" {
 		display.Secret = maskSecret(display.Secret)
 	}
-	data, err := json.MarshalIndent(display, "", "  ")
+	data, err := json.MarshalIndent(display, "", "  ") //nolint:gosec // G117: display.Secret is masked above, so no real credential is marshaled here
 	if err != nil {
 		return err
 	}
@@ -407,7 +433,7 @@ func handleConfigGet(cfgPath string, args []string) error {
 	return nil
 }
 
-func getConfigField(fc FileConfig, key string) (string, error) {
+func getConfigField(fc *FileConfig, key string) (string, error) {
 	fields := map[string]string{
 		"username":         fc.Username,
 		"secret":           maskSecret(fc.Secret),
@@ -417,7 +443,7 @@ func getConfigField(fc FileConfig, key string) (string, error) {
 		"apiurl":           fc.APIURL,
 		"server_name":      fc.ServerName,
 		"servername":       fc.ServerName,
-		"transport":        fc.Transport,
+		keyTransport:       fc.Transport,
 		"http_host":        fc.HTTPHost,
 		"httphost":         fc.HTTPHost,
 		"log_level":        fc.LogLevel,
@@ -451,8 +477,8 @@ func getConfigField(fc FileConfig, key string) (string, error) {
 }
 
 func handleConfigSet(cfgPath string, args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: autotask-mcp config set <key> <value>")
+	if len(args) < minSetArgs {
+		return errors.New("usage: autotask-mcp config set <key> <value>")
 	}
 	key, val := strings.ToLower(args[0]), args[1]
 
@@ -465,7 +491,7 @@ func handleConfigSet(cfgPath string, args []string) error {
 		return err
 	}
 
-	if err := saveFileConfig(cfgPath, fc); err != nil {
+	if err := saveFileConfig(cfgPath, &fc); err != nil {
 		return err
 	}
 	fmt.Printf("Successfully updated %s in %s\n", key, cfgPath)
@@ -473,27 +499,35 @@ func handleConfigSet(cfgPath string, args []string) error {
 }
 
 func setConfigField(fc *FileConfig, key, val string) error {
-	switch strings.ToLower(key) {
+	k := strings.ToLower(key)
+	if setStringConfigField(fc, k, val) {
+		return nil
+	}
+	switch k {
+	case "api_url", "apiurl":
+		return setAPIURLField(fc, val)
+	case "http_port", "httpport":
+		return setHTTPPortField(fc, val)
+	case "gateway_client_cache_size", "gatewayclientcachesize":
+		return setGatewayCacheSizeField(fc, val)
+	case "lazy_loading", "lazyloading":
+		return setLazyLoadingField(fc, key, val)
+	default:
+		return fmt.Errorf("unknown config key %q", key)
+	}
+}
+
+func setStringConfigField(fc *FileConfig, key, val string) bool {
+	switch key {
 	case "username":
 		fc.Username = val
 	case "secret":
 		fc.Secret = val
 	case "integration_code", "integrationcode":
 		fc.IntegrationCode = val
-	case "api_url", "apiurl":
-		// Validate on write, matching http_port/lazy_loading, so the CLI cannot
-		// persist a value that the server would later refuse to use. An empty value
-		// clears the field. Custom hosts belong in the AUTOTASK_API_URL environment
-		// override, not the file.
-		if val != "" {
-			if err := validateFileAPIURL(val); err != nil {
-				return err
-			}
-		}
-		fc.APIURL = val
 	case "server_name", "servername":
 		fc.ServerName = val
-	case "transport":
+	case keyTransport:
 		fc.Transport = val
 	case "http_host", "httphost":
 		fc.HTTPHost = val
@@ -501,50 +535,73 @@ func setConfigField(fc *FileConfig, key, val string) error {
 		fc.LogLevel = val
 	case "auth_mode", "authmode":
 		fc.AuthMode = val
-	case "http_port", "httpport":
-		if val == "" {
-			fc.HTTPPort = nil
-			return nil
-		}
-		p, err := strconv.Atoi(val)
-		if err != nil || p <= 0 || p > 65535 {
-			return fmt.Errorf("invalid port %q: must be integer between 1 and 65535", val)
-		}
-		fc.HTTPPort = &p
-	case "gateway_client_cache_size", "gatewayclientcachesize":
-		if val == "" {
-			fc.GatewayClientCacheSize = nil
-			return nil
-		}
-		n, err := strconv.Atoi(val)
-		if err != nil || n <= 0 {
-			return fmt.Errorf("invalid gateway client cache size %q: must be a positive integer", val)
-		}
-		fc.GatewayClientCacheSize = &n
-	case "lazy_loading", "lazyloading":
-		if val == "" {
-			fc.LazyLoading = nil
-			return nil
-		}
-		switch strings.ToLower(val) {
-		case "true", "1":
-			b := true
-			fc.LazyLoading = &b
-		case "false", "0":
-			b := false
-			fc.LazyLoading = &b
-		default:
-			return fmt.Errorf("invalid boolean value %q for %s: must be true or false", val, key)
-		}
 	default:
-		return fmt.Errorf("unknown config key %q", key)
+		return false
+	}
+	return true
+}
+
+func setAPIURLField(fc *FileConfig, val string) error {
+	// Validate on write, matching http_port/lazy_loading, so the CLI cannot
+	// persist a value that the server would later refuse to use. An empty value
+	// clears the field. Custom hosts belong in the AUTOTASK_API_URL environment
+	// override, not the file.
+	if val != "" {
+		if err := validateFileAPIURL(val); err != nil {
+			return err
+		}
+	}
+	fc.APIURL = val
+	return nil
+}
+
+func setHTTPPortField(fc *FileConfig, val string) error {
+	if val == "" {
+		fc.HTTPPort = nil
+		return nil
+	}
+	p, err := strconv.Atoi(val)
+	if err != nil || p <= 0 || p > 65535 {
+		return fmt.Errorf("invalid port %q: must be integer between 1 and 65535", val)
+	}
+	fc.HTTPPort = &p
+	return nil
+}
+
+func setGatewayCacheSizeField(fc *FileConfig, val string) error {
+	if val == "" {
+		fc.GatewayClientCacheSize = nil
+		return nil
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil || n <= 0 {
+		return fmt.Errorf("invalid gateway client cache size %q: must be a positive integer", val)
+	}
+	fc.GatewayClientCacheSize = &n
+	return nil
+}
+
+func setLazyLoadingField(fc *FileConfig, key, val string) error {
+	if val == "" {
+		fc.LazyLoading = nil
+		return nil
+	}
+	switch strings.ToLower(val) {
+	case "true", "1":
+		b := true
+		fc.LazyLoading = &b
+	case "false", "0":
+		b := false
+		fc.LazyLoading = &b
+	default:
+		return fmt.Errorf("invalid boolean value %q for %s: must be true or false", val, key)
 	}
 	return nil
 }
 
 func handleConfigUnset(cfgPath string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: autotask-mcp config unset <key>")
+		return errors.New("usage: autotask-mcp config unset <key>")
 	}
 	key := strings.ToLower(args[0])
 
@@ -561,7 +618,7 @@ func handleConfigUnset(cfgPath string, args []string) error {
 		return err
 	}
 
-	if err := saveFileConfig(cfgPath, fc); err != nil {
+	if err := saveFileConfig(cfgPath, &fc); err != nil {
 		return err
 	}
 	fmt.Printf("Successfully unset %s in %s\n", key, cfgPath)

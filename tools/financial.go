@@ -142,87 +142,103 @@ type SearchContractsInput struct {
 	MaxResults int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
+const (
+	toolGetQuote            = "autotask_get_quote"
+	toolSearchQuotes        = "autotask_search_quotes"
+	toolCreateQuote         = "autotask_create_quote"
+	toolGetQuoteItem        = "autotask_get_quote_item"
+	toolSearchQuoteItems    = "autotask_search_quote_items"
+	toolCreateQuoteItem     = "autotask_create_quote_item"
+	toolUpdateQuoteItem     = "autotask_update_quote_item"
+	toolDeleteQuoteItem     = "autotask_delete_quote_item"
+	toolGetOpportunity      = "autotask_get_opportunity"
+	toolSearchOpportunities = "autotask_search_opportunities"
+	toolCreateOpportunity   = "autotask_create_opportunity"
+	toolSearchInvoices      = "autotask_search_invoices"
+	toolSearchContracts     = "autotask_search_contracts"
+)
+
 // RegisterFinancialTools registers all financial-related MCP tools with the server.
 func RegisterFinancialTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	// Quotes
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_quote",
+		Name:        toolGetQuote,
 		Description: "Retrieve one sales quote by its numeric quoteId, returning its full field set. To locate quotes by company, contact, opportunity, or name use autotask_search_quotes instead. Read-only.",
 		Annotations: readOnlyTool("Get quote"),
 	}, getQuoteHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_quotes",
+		Name:        toolSearchQuotes,
 		Description: "Find sales quotes filtered by company, contact, opportunity, or quote-name substring, returning up to maxResults matches (default 25, max 500). Use this to locate quotes, then autotask_get_quote for the full field set of one quote by its ID. Read-only.",
 		Annotations: readOnlyTool("Search quotes"),
 	}, searchQuotesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_quote",
+		Name:        toolCreateQuote,
 		Description: "Create a sales quote for a company, optionally linked to a contact or opportunity, with a name, description, and effective and expiration dates. Requires companyId; returns the created quote including its new ID. Add line items to it afterward with autotask_create_quote_item. Writes to Autotask.",
 		Annotations: createTool("Create quote"),
 	}, createQuoteHandler(client))
 
 	// Quote Items
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_quote_item",
+		Name:        toolGetQuoteItem,
 		Description: "Retrieve one line item on a quote by its numeric quoteItemId, returning its full field set including quantity, pricing, discounts, and the linked product, service, or service bundle. To list the items belonging to a quote use autotask_search_quote_items instead. Read-only.",
 		Annotations: readOnlyTool("Get quote item"),
 	}, getQuoteItemHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_quote_items",
+		Name:        toolSearchQuoteItems,
 		Description: "Find line items belonging to a quote, filtered by quoteId or item-name substring, returning up to maxResults matches (default 25, max 500). Use this to list a quote's items, then autotask_get_quote_item for the full field set of one item by its ID. Read-only.",
 		Annotations: readOnlyTool("Search quote items"),
 	}, searchQuoteItemsHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_quote_item",
+		Name:        toolCreateQuoteItem,
 		Description: "Add a line item to an existing quote from a quantity plus optional pricing, discounts, and a linked product, service, or service bundle. Requires quoteId and quantity; when quoteItemType is omitted it is inferred from productID (type 1), serviceID (type 11), or serviceBundleID (type 12). To change an existing item use autotask_update_quote_item, or autotask_delete_quote_item to remove one. Writes to Autotask.",
 		Annotations: createTool("Create quote item"),
 	}, createQuoteItemHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_update_quote_item",
+		Name:        toolUpdateQuoteItem,
 		Description: "Change fields (quantity, unit price, discounts, optional flag, sort order) on an existing quote line item identified by quoteItemId; only the fields you supply are modified, the rest are left untouched. Use autotask_create_quote_item to add a new item, or autotask_delete_quote_item to remove one. Writes to Autotask.",
 		Annotations: updateTool("Update quote item"),
 	}, updateQuoteItemHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_delete_quote_item",
+		Name:        toolDeleteQuoteItem,
 		Description: "Permanently remove one line item from its quote, identified by quoteId and quoteItemId. Use autotask_update_quote_item to change an item's fields instead of deleting it. Writes to Autotask.",
 		Annotations: deleteTool("Delete quote item"),
 	}, deleteQuoteItemHandler(client))
 
 	// Opportunities
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_opportunity",
+		Name:        toolGetOpportunity,
 		Description: "Retrieve one sales opportunity by its numeric opportunityId, returning its full field set. To find opportunities by company, title, or status use autotask_search_opportunities instead. Read-only.",
 		Annotations: readOnlyTool("Get opportunity"),
 	}, getOpportunityHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_opportunities",
+		Name:        toolSearchOpportunities,
 		Description: "Find sales opportunities filtered by company, title substring, or status, returning up to maxResults matches (default 25, max 500). Use this to locate opportunities, then autotask_get_opportunity for the full field set of one opportunity by its ID. Read-only.",
 		Annotations: readOnlyTool("Search opportunities"),
 	}, searchOpportunitiesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_opportunity",
+		Name:        toolCreateOpportunity,
 		Description: "Create a sales opportunity for a company from a title, owner resource, status, stage, projected close date, and start date, with optional amount, cost, win probability, and category. Requires title, companyId, ownerResourceId, status, stage, projectedCloseDate, and startDate; returns the created opportunity including its new ID. Reference that ID as opportunityId when adding quotes with autotask_create_quote. Writes to Autotask.",
 		Annotations: createTool("Create opportunity"),
 	}, createOpportunityHandler(client))
 
 	// Invoices
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_invoices",
+		Name:        toolSearchInvoices,
 		Description: "Find invoices filtered by company, exact invoice number, or voided status, returning up to maxResults matches (default 25, max 500). This is the only invoice tool; invoices are generated by Autotask billing rather than through this server, and each match is returned with its full field set inline. Read-only.",
 		Annotations: readOnlyTool("Search invoices"),
 	}, searchInvoicesHandler(client))
 
 	// Contracts
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_contracts",
+		Name:        toolSearchContracts,
 		Description: "Find customer contracts filtered by company, contract-name substring, or status, returning a compact summary of matching records (up to maxResults, default 25, max 500) with resolved reference names. This is the only contract tool; use the returned contract IDs to filter related resources such as tickets and time entries. Read-only.",
 		Annotations: readOnlyTool("Search contracts"),
 	}, searchContractsHandler(client, mapper))
@@ -248,7 +264,7 @@ func getQuoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp
 // searchQuotesHandler returns a handler that searches quotes.
 func searchQuotesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuotesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.CompanyID != 0 {
@@ -278,41 +294,16 @@ func searchQuotesHandler(client *autotask.Client) func(ctx context.Context, req 
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_quotes", maxResults)
+		return searchResult(ctx, nil, maps, toolSearchQuotes, maxResults)
 	}
 }
 
 // createQuoteHandler returns a handler that creates a new quote.
 func createQuoteHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteInput) (*mcp.CallToolResult, map[string]any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteInput) (*mcp.CallToolResult, map[string]any, error) {
-		entity := &entities.Quote{
-			CompanyID: autotask.Set(in.CompanyID),
-		}
-		if in.Name != "" {
-			entity.Name = autotask.Set(in.Name)
-		}
-		if in.Description != "" {
-			entity.Description = autotask.Set(in.Description)
-		}
-		if in.ContactID != 0 {
-			entity.ContactID = autotask.Set(in.ContactID)
-		}
-		if in.OpportunityID != 0 {
-			entity.OpportunityID = autotask.Set(in.OpportunityID)
-		}
-		if in.EffectiveDate != "" {
-			t, err := parseDate(in.EffectiveDate)
-			if err != nil {
-				return nil, nil, err
-			}
-			entity.EffectiveDate = autotask.Set(t)
-		}
-		if in.ExpirationDate != "" {
-			t, err := parseDate(in.ExpirationDate)
-			if err != nil {
-				return nil, nil, err
-			}
-			entity.ExpirationDate = autotask.Set(t)
+		entity, err := buildQuote(&in)
+		if err != nil {
+			return nil, nil, err
 		}
 
 		created, err := autotask.Create[entities.Quote](ctx, client, entity)
@@ -327,6 +318,39 @@ func createQuoteHandler(client *autotask.Client) func(ctx context.Context, req *
 
 		return nil, m, nil
 	}
+}
+
+func buildQuote(in *CreateQuoteInput) (*entities.Quote, error) {
+	entity := &entities.Quote{
+		CompanyID: autotask.Set(in.CompanyID),
+	}
+	if in.Name != "" {
+		entity.Name = autotask.Set(in.Name)
+	}
+	if in.Description != "" {
+		entity.Description = autotask.Set(in.Description)
+	}
+	if in.ContactID != 0 {
+		entity.ContactID = autotask.Set(in.ContactID)
+	}
+	if in.OpportunityID != 0 {
+		entity.OpportunityID = autotask.Set(in.OpportunityID)
+	}
+	if in.EffectiveDate != "" {
+		t, err := parseDate(in.EffectiveDate)
+		if err != nil {
+			return nil, err
+		}
+		entity.EffectiveDate = autotask.Set(t)
+	}
+	if in.ExpirationDate != "" {
+		t, err := parseDate(in.ExpirationDate)
+		if err != nil {
+			return nil, err
+		}
+		entity.ExpirationDate = autotask.Set(t)
+	}
+	return entity, nil
 }
 
 // getQuoteItemHandler returns a handler that retrieves a single quote item.
@@ -349,7 +373,7 @@ func getQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req 
 // searchQuoteItemsHandler returns a handler that searches quote items.
 func searchQuoteItemsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuoteItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchQuoteItemsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.QuoteID != 0 {
@@ -373,75 +397,14 @@ func searchQuoteItemsHandler(client *autotask.Client) func(ctx context.Context, 
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_quote_items", maxResults)
+		return searchResult(ctx, nil, maps, toolSearchQuoteItems, maxResults)
 	}
 }
 
 // createQuoteItemHandler returns a handler that creates a new quote item.
 func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteItemInput) (*mcp.CallToolResult, map[string]any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateQuoteItemInput) (*mcp.CallToolResult, map[string]any, error) {
-		entity := &entities.QuoteItem{
-			QuoteID:  autotask.Set(in.QuoteID),
-			Quantity: autotask.Set(in.Quantity),
-		}
-
-		if in.Name != "" {
-			entity.Name = autotask.Set(in.Name)
-		}
-		if in.Description != "" {
-			entity.Description = autotask.Set(in.Description)
-		}
-		if in.UnitPrice != 0 {
-			entity.UnitPrice = autotask.Set(in.UnitPrice)
-		}
-		if in.UnitCost != 0 {
-			entity.UnitCost = autotask.Set(in.UnitCost)
-		}
-		if in.UnitDiscount != 0 {
-			entity.UnitDiscount = autotask.Set(in.UnitDiscount)
-		}
-		if in.LineDiscount != 0 {
-			entity.LineDiscount = autotask.Set(in.LineDiscount)
-		}
-		if in.PercentageDiscount != 0 {
-			entity.PercentageDiscount = autotask.Set(in.PercentageDiscount)
-		}
-		if in.IsOptional != nil {
-			entity.IsOptional = autotask.Set(*in.IsOptional)
-		}
-		if in.ProductID != 0 {
-			entity.ProductID = autotask.Set(in.ProductID)
-		}
-		if in.ServiceID != 0 {
-			entity.ServiceID = autotask.Set(in.ServiceID)
-		}
-		if in.ServiceBundleID != 0 {
-			entity.ServiceBundleID = autotask.Set(in.ServiceBundleID)
-		}
-		if in.SortOrderID != 0 {
-			entity.SortOrderID = autotask.Set(int64(in.SortOrderID))
-		}
-
-		// Auto-determine quoteItemType if not provided.
-		const (
-			quoteItemProduct       = 1
-			quoteItemService       = 11
-			quoteItemServiceBundle = 12
-		)
-		itemType := in.QuoteItemType
-		if itemType == 0 {
-			switch {
-			case in.ProductID != 0:
-				itemType = quoteItemProduct
-			case in.ServiceID != 0:
-				itemType = quoteItemService
-			case in.ServiceBundleID != 0:
-				itemType = quoteItemServiceBundle
-			}
-		}
-		if itemType != 0 {
-			entity.QuoteItemType = autotask.Set(int64(itemType))
-		}
+		entity := buildQuoteItem(&in)
 
 		created, err := autotask.Create[entities.QuoteItem](ctx, client, entity)
 		if err != nil {
@@ -455,6 +418,77 @@ func createQuoteItemHandler(client *autotask.Client) func(ctx context.Context, r
 
 		return nil, m, nil
 	}
+}
+
+func determineQuoteItemType(in *CreateQuoteItemInput) int {
+	const (
+		quoteItemProduct       = 1
+		quoteItemService       = 11
+		quoteItemServiceBundle = 12
+	)
+	if in.QuoteItemType != 0 {
+		return in.QuoteItemType
+	}
+	switch {
+	case in.ProductID != 0:
+		return quoteItemProduct
+	case in.ServiceID != 0:
+		return quoteItemService
+	case in.ServiceBundleID != 0:
+		return quoteItemServiceBundle
+	default:
+		return 0
+	}
+}
+
+func buildQuoteItem(in *CreateQuoteItemInput) *entities.QuoteItem {
+	entity := &entities.QuoteItem{
+		QuoteID:  autotask.Set(in.QuoteID),
+		Quantity: autotask.Set(in.Quantity),
+	}
+
+	if in.Name != "" {
+		entity.Name = autotask.Set(in.Name)
+	}
+	if in.Description != "" {
+		entity.Description = autotask.Set(in.Description)
+	}
+	if in.UnitPrice != 0 {
+		entity.UnitPrice = autotask.Set(in.UnitPrice)
+	}
+	if in.UnitCost != 0 {
+		entity.UnitCost = autotask.Set(in.UnitCost)
+	}
+	if in.UnitDiscount != 0 {
+		entity.UnitDiscount = autotask.Set(in.UnitDiscount)
+	}
+	if in.LineDiscount != 0 {
+		entity.LineDiscount = autotask.Set(in.LineDiscount)
+	}
+	if in.PercentageDiscount != 0 {
+		entity.PercentageDiscount = autotask.Set(in.PercentageDiscount)
+	}
+	if in.IsOptional != nil {
+		entity.IsOptional = autotask.Set(*in.IsOptional)
+	}
+	if in.ProductID != 0 {
+		entity.ProductID = autotask.Set(in.ProductID)
+	}
+	if in.ServiceID != 0 {
+		entity.ServiceID = autotask.Set(in.ServiceID)
+	}
+	if in.ServiceBundleID != 0 {
+		entity.ServiceBundleID = autotask.Set(in.ServiceBundleID)
+	}
+	if in.SortOrderID != 0 {
+		entity.SortOrderID = autotask.Set(int64(in.SortOrderID))
+	}
+
+	if itemType := determineQuoteItemType(in); itemType != 0 {
+		entity.QuoteItemType = autotask.Set(int64(itemType))
+	}
+
+	return entity
 }
 
 // updateQuoteItemHandler returns a handler that updates an existing quote item.
@@ -535,7 +569,7 @@ func getOpportunityHandler(client *autotask.Client) func(ctx context.Context, re
 // searchOpportunitiesHandler returns a handler that searches opportunities.
 func searchOpportunitiesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchOpportunitiesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchOpportunitiesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.CompanyID != 0 {
@@ -562,55 +596,16 @@ func searchOpportunitiesHandler(client *autotask.Client) func(ctx context.Contex
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_opportunities", maxResults)
+		return searchResult(ctx, nil, maps, toolSearchOpportunities, maxResults)
 	}
 }
 
 // createOpportunityHandler returns a handler that creates a new opportunity.
 func createOpportunityHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in CreateOpportunityInput) (*mcp.CallToolResult, map[string]any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in CreateOpportunityInput) (*mcp.CallToolResult, map[string]any, error) {
-		projectedClose, err := parseDate(in.ProjectedCloseDate)
+		entity, err := buildOpportunity(&in)
 		if err != nil {
 			return nil, nil, err
-		}
-		startDate, err := parseDate(in.StartDate)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		entity := &entities.Opportunity{
-			Title:              autotask.Set(in.Title),
-			CompanyID:          autotask.Set(in.CompanyID),
-			OwnerResourceID:    autotask.Set(in.OwnerResourceID),
-			Status:             autotask.Set(int64(in.Status)),
-			Stage:              autotask.Set(int64(in.Stage)),
-			ProjectedCloseDate: autotask.Set(projectedClose),
-			StartDate:          autotask.Set(startDate),
-		}
-
-		if in.Probability != 0 {
-			entity.Probability = autotask.Set(int64(in.Probability))
-		}
-		if in.Amount != 0 {
-			entity.Amount = autotask.Set(in.Amount)
-		}
-		if in.Cost != 0 {
-			entity.Cost = autotask.Set(in.Cost)
-		}
-		if in.UseQuoteTotals {
-			entity.UseQuoteTotals = autotask.Set(in.UseQuoteTotals)
-		}
-		if in.TotalAmountMonths != 0 {
-			entity.TotalAmountMonths = autotask.Set(int64(in.TotalAmountMonths))
-		}
-		if in.ContactID != 0 {
-			entity.ContactID = autotask.Set(in.ContactID)
-		}
-		if in.Description != "" {
-			entity.Description = autotask.Set(in.Description)
-		}
-		if in.OpportunityCategoryID != 0 {
-			entity.OpportunityCategoryID = autotask.Set(int64(in.OpportunityCategoryID))
 		}
 
 		created, err := autotask.Create[entities.Opportunity](ctx, client, entity)
@@ -627,10 +622,58 @@ func createOpportunityHandler(client *autotask.Client) func(ctx context.Context,
 	}
 }
 
+func buildOpportunity(in *CreateOpportunityInput) (*entities.Opportunity, error) {
+	projectedClose, err := parseDate(in.ProjectedCloseDate)
+	if err != nil {
+		return nil, err
+	}
+	startDate, err := parseDate(in.StartDate)
+	if err != nil {
+		return nil, err
+	}
+
+	entity := &entities.Opportunity{
+		Title:              autotask.Set(in.Title),
+		CompanyID:          autotask.Set(in.CompanyID),
+		OwnerResourceID:    autotask.Set(in.OwnerResourceID),
+		Status:             autotask.Set(int64(in.Status)),
+		Stage:              autotask.Set(int64(in.Stage)),
+		ProjectedCloseDate: autotask.Set(projectedClose),
+		StartDate:          autotask.Set(startDate),
+	}
+
+	if in.Probability != 0 {
+		entity.Probability = autotask.Set(int64(in.Probability))
+	}
+	if in.Amount != 0 {
+		entity.Amount = autotask.Set(in.Amount)
+	}
+	if in.Cost != 0 {
+		entity.Cost = autotask.Set(in.Cost)
+	}
+	if in.UseQuoteTotals {
+		entity.UseQuoteTotals = autotask.Set(in.UseQuoteTotals)
+	}
+	if in.TotalAmountMonths != 0 {
+		entity.TotalAmountMonths = autotask.Set(int64(in.TotalAmountMonths))
+	}
+	if in.ContactID != 0 {
+		entity.ContactID = autotask.Set(in.ContactID)
+	}
+	if in.Description != "" {
+		entity.Description = autotask.Set(in.Description)
+	}
+	if in.OpportunityCategoryID != 0 {
+		entity.OpportunityCategoryID = autotask.Set(int64(in.OpportunityCategoryID))
+	}
+
+	return entity, nil
+}
+
 // searchInvoicesHandler returns a handler that searches invoices.
 func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchInvoicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchInvoicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.CompanyID != 0 {
@@ -657,14 +700,14 @@ func searchInvoicesHandler(client *autotask.Client) func(ctx context.Context, re
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_invoices", maxResults)
+		return searchResult(ctx, nil, maps, toolSearchInvoices, maxResults)
 	}
 }
 
 // searchContractsHandler returns a handler that searches contracts.
 func searchContractsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchContractsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchContractsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
@@ -691,6 +734,6 @@ func searchContractsHandler(client *autotask.Client, mapper *services.MappingCac
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_contracts", maxResults)
+		return searchResult(ctx, mapper, maps, toolSearchContracts, maxResults)
 	}
 }

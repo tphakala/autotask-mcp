@@ -30,16 +30,21 @@ type CreateTaskInput struct {
 	EndDateTime        string   `json:"endDateTime,omitempty" jsonschema:"End date/time (ISO format)"`
 }
 
+const (
+	toolSearchTasks = "autotask_search_tasks"
+	toolCreateTask  = "autotask_create_task"
+)
+
 // RegisterTaskTools registers all task-related MCP tools with the server.
 func RegisterTaskTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_tasks",
+		Name:        toolSearchTasks,
 		Description: "Find project tasks by title substring, parent project ID, status, or assigned resource, returning a compact summary of matching records (up to maxResults, default 25, max 100). Use this to locate tasks within a project; to add a new task use autotask_create_task instead. Returns tasks of every status when no status filter is given, including completed tasks. Read-only.",
 		Annotations: readOnlyTool("Search tasks"),
 	}, searchTasksHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_task",
+		Name:        toolCreateTask,
 		Description: "Add a task to an existing project from a title and status, with optional description, resource assignment, estimated hours, and start and end dates. Requires projectID, title, and status (1=New, 2=In Progress, 5=Complete); returns the created task including its new ID. To find existing tasks use autotask_search_tasks instead. Writes to Autotask.",
 		Annotations: createTool("Create task"),
 	}, createTaskHandler(client))
@@ -48,7 +53,7 @@ func RegisterTaskTools(s *mcp.Server, client *autotask.Client, mapper *services.
 // searchTasksHandler returns a handler that searches tasks using the provided filters.
 func searchTasksHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTasksInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTasksInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitSmall)
 
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
@@ -79,7 +84,7 @@ func searchTasksHandler(client *autotask.Client, mapper *services.MappingCache) 
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_tasks", maxResults)
+		return searchResult(ctx, mapper, maps, toolSearchTasks, maxResults)
 	}
 }
 

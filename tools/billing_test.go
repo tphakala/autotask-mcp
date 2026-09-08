@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -22,7 +21,7 @@ func TestRegisterBillingTools_NoPanic(t *testing.T) {
 // TestGetBillingItemHandler_NotFound tests that a missing billing item returns an error result over wire.
 func TestGetBillingItemHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_billing_item",
@@ -41,7 +40,7 @@ func TestGetBillingItemHandler_NotFound(t *testing.T) {
 // TestSearchBillingItemsHandler_NoResults tests the empty-result case over wire.
 func TestSearchBillingItemsHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_billing_items",
@@ -63,7 +62,7 @@ func TestSearchBillingItemsHandler_NoResults(t *testing.T) {
 // TestSearchBillingItemApprovalLevelsHandler_NoResults tests the empty-result case over wire.
 func TestSearchBillingItemApprovalLevelsHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_billing_item_approval_levels",
@@ -85,7 +84,7 @@ func TestSearchBillingItemApprovalLevelsHandler_NoResults(t *testing.T) {
 // TestGetBillingItemHandler_MissingId tests that billingItemId=0 returns a validation error.
 func TestGetBillingItemHandler_MissingId(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_billing_item",
@@ -109,7 +108,7 @@ func TestGetBillingItemHandler_Success(t *testing.T) {
 		Description: autotask.Set("Monthly Support"),
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(item))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_billing_item",

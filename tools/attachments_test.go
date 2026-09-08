@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -21,7 +20,7 @@ func TestRegisterAttachmentTools_NoPanic(t *testing.T) {
 // TestGetTicketAttachmentHandler_NotFound tests that a missing attachment returns an error result over wire.
 func TestGetTicketAttachmentHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_ticket_attachment",
@@ -40,7 +39,7 @@ func TestGetTicketAttachmentHandler_NotFound(t *testing.T) {
 // TestSearchTicketAttachmentsHandler_NoResults verifies empty search response over wire.
 func TestSearchTicketAttachmentsHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_ticket_attachments",
@@ -71,7 +70,7 @@ func TestSearchTicketAttachmentsHandler_WithResults(t *testing.T) {
 		FullPath: autotask.Set("/path/to/test.txt"),
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(att))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_ticket_attachments",
@@ -104,7 +103,7 @@ func TestSearchTicketAttachmentsHandler_WithResults(t *testing.T) {
 // from the bounded set. Bounding matters most here: each row carries a base64 blob.
 func TestSearchTicketAttachmentsHandler_BoundedByMaxResults(t *testing.T) {
 	atts := make([]*entities.TicketAttachment, 0, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		atts = append(atts, &entities.TicketAttachment{
 			ID:       autotask.Set(int64(7000 + i)),
 			TicketID: autotask.Set(int64(3001)),
@@ -114,7 +113,7 @@ func TestSearchTicketAttachmentsHandler_BoundedByMaxResults(t *testing.T) {
 		})
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(atts...))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_ticket_attachments",
@@ -157,7 +156,7 @@ func TestGetTicketAttachmentHandler_StripDataByDefault(t *testing.T) {
 		FullPath: autotask.Set("/path/to/test.txt"),
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(att))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_ticket_attachment",
@@ -192,7 +191,7 @@ func TestGetTicketAttachmentHandler_IncludeData(t *testing.T) {
 		FullPath: autotask.Set("/path/to/test.txt"),
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(att))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_ticket_attachment",

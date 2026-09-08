@@ -27,16 +27,21 @@ type CreateContactInput struct {
 	Title        string `json:"title,omitempty" jsonschema:"Contact job title"`
 }
 
+const (
+	toolSearchContacts = "autotask_search_contacts"
+	toolCreateContact  = "autotask_create_contact"
+)
+
 // RegisterContactTools registers all contact-related MCP tools with the server.
 func RegisterContactTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_contacts",
+		Name:        toolSearchContacts,
 		Description: "Find contacts by name or email substring, company ID, or active status, returning a compact summary of matching records (up to maxResults, default 25, max 200). A searchTerm matches across first name, last name, and email address. Use this to locate a contact and its ID; to add a new one instead use autotask_create_contact. Read-only.",
 		Annotations: readOnlyTool("Search contacts"),
 	}, searchContactsHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_contact",
+		Name:        toolCreateContact,
 		Description: "Add a new contact under a company from a first and last name, with optional email, phone, and job title. Requires companyID, firstName, and lastName, and returns the created contact including its new ID; look up the companyID with autotask_search_companies. To find existing contacts instead use autotask_search_contacts. Writes to Autotask.",
 		Annotations: createTool("Create contact"),
 	}, createContactHandler(client))
@@ -45,7 +50,7 @@ func RegisterContactTools(s *mcp.Server, client *autotask.Client, mapper *servic
 // searchContactsHandler returns a handler that searches contacts using the provided filters.
 func searchContactsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchContactsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchContactsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 200)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitMedium)
 
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
@@ -77,7 +82,7 @@ func searchContactsHandler(client *autotask.Client, mapper *services.MappingCach
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_contacts", maxResults)
+		return searchResult(ctx, mapper, maps, toolSearchContacts, maxResults)
 	}
 }
 

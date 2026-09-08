@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -19,7 +18,7 @@ func TestRegisterConnectionTools_NoPanic(t *testing.T) {
 func TestTestConnectionHandler_Direct(t *testing.T) {
 	_, client := autotasktest.NewServer(t)
 	handler := testConnectionHandler(client)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	res, out, err := handler(ctx, nil, struct{}{})
 	if err != nil {
@@ -36,7 +35,7 @@ func TestTestConnectionHandler_Direct(t *testing.T) {
 // TestTestConnectionHandler_Wire tests that connection succeeds against the mock server over wire protocol.
 func TestTestConnectionHandler_Wire(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_test_connection",

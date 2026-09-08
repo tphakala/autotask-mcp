@@ -103,8 +103,8 @@ func (m *MappingCache) GetResourceName(ctx context.Context, id int64) string {
 		return m.cacheAndReturn(m.resources, id, unknownName(id))
 	}
 
-	firstName, _ := raw["firstName"].(string)
-	lastName, _ := raw["lastName"].(string)
+	firstName, _ := raw[fieldFirstName].(string)
+	lastName, _ := raw[fieldLastName].(string)
 	name := strings.TrimSpace(firstName + " " + lastName)
 	if name == "" {
 		return m.cacheAndReturn(m.resources, id, unknownName(id))
@@ -116,42 +116,50 @@ func (m *MappingCache) GetResourceName(ctx context.Context, id int64) string {
 // EnhanceItems adds an "_enhanced" map with human-readable names to each item.
 // It batch-preloads uncached company/resource names before enhancing to minimize API calls.
 func (m *MappingCache) EnhanceItems(ctx context.Context, items []map[string]any) {
-	companyIDs := make(map[int64]bool)
-	resourceIDs := make(map[int64]bool)
-	for _, item := range items {
-		if id, ok := toInt64(item["companyID"]); ok && id != 0 {
-			companyIDs[id] = true
-		}
-		for _, field := range []string{"assignedResourceID", "resourceID", "projectLeadResourceID"} {
-			if id, ok := toInt64(item[field]); ok && id != 0 {
-				resourceIDs[id] = true
-			}
-		}
-	}
+	companyIDs, resourceIDs := collectEntityIDs(items)
 
 	m.preloadCompanies(ctx, companyIDs)
 	m.preloadResources(ctx, resourceIDs)
 
 	for _, item := range items {
-		enhanced := make(map[string]any)
-
-		if id, ok := toInt64(item["companyID"]); ok && id != 0 {
-			enhanced["companyName"] = m.GetCompanyName(ctx, id)
-		}
-		if id, ok := toInt64(item["assignedResourceID"]); ok && id != 0 {
-			enhanced["assignedResourceName"] = m.GetResourceName(ctx, id)
-		}
-		if id, ok := toInt64(item["resourceID"]); ok && id != 0 {
-			enhanced["resourceName"] = m.GetResourceName(ctx, id)
-		}
-		if id, ok := toInt64(item["projectLeadResourceID"]); ok && id != 0 {
-			enhanced["projectLeadResourceName"] = m.GetResourceName(ctx, id)
-		}
-
+		enhanced := m.buildEnhancedMap(ctx, item)
 		if len(enhanced) > 0 {
 			item["_enhanced"] = enhanced
 		}
 	}
+}
+
+func collectEntityIDs(items []map[string]any) (companyIDs, resourceIDs map[int64]bool) {
+	companyIDs = make(map[int64]bool)
+	resourceIDs = make(map[int64]bool)
+	for _, item := range items {
+		if id, ok := toInt64(item[fieldCompanyID]); ok && id != 0 {
+			companyIDs[id] = true
+		}
+		for _, field := range []string{fieldAssignedResourceID, "resourceID", "projectLeadResourceID"} {
+			if id, ok := toInt64(item[field]); ok && id != 0 {
+				resourceIDs[id] = true
+			}
+		}
+	}
+	return companyIDs, resourceIDs
+}
+
+func (m *MappingCache) buildEnhancedMap(ctx context.Context, item map[string]any) map[string]any {
+	enhanced := make(map[string]any)
+	if id, ok := toInt64(item[fieldCompanyID]); ok && id != 0 {
+		enhanced["companyName"] = m.GetCompanyName(ctx, id)
+	}
+	if id, ok := toInt64(item[fieldAssignedResourceID]); ok && id != 0 {
+		enhanced["assignedResourceName"] = m.GetResourceName(ctx, id)
+	}
+	if id, ok := toInt64(item["resourceID"]); ok && id != 0 {
+		enhanced["resourceName"] = m.GetResourceName(ctx, id)
+	}
+	if id, ok := toInt64(item["projectLeadResourceID"]); ok && id != 0 {
+		enhanced["projectLeadResourceName"] = m.GetResourceName(ctx, id)
+	}
+	return enhanced
 }
 
 // preloadCompanies batch-fetches uncached company names via a single API query.
@@ -195,7 +203,7 @@ func (m *MappingCache) preloadResources(ctx context.Context, ids map[int64]bool)
 
 	q := autotask.NewQuery().
 		Where("id", autotask.OpIn, uncached).
-		Fields("id", "firstName", "lastName").
+		Fields("id", fieldFirstName, fieldLastName).
 		Limit(len(uncached))
 
 	results, err := autotask.ListRaw(ctx, m.client, "Resources", q)
@@ -210,8 +218,8 @@ func (m *MappingCache) preloadResources(ctx context.Context, ids map[int64]bool)
 		if !ok {
 			continue
 		}
-		first, _ := r["firstName"].(string)
-		last, _ := r["lastName"].(string)
+		first, _ := r[fieldFirstName].(string)
+		last, _ := r[fieldLastName].(string)
 		name := strings.TrimSpace(first + " " + last)
 		if name != "" {
 			m.resources[id] = cacheEntry{name: name, expiry: now.Add(mappingTTL)}

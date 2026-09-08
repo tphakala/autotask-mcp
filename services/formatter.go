@@ -5,17 +5,27 @@ import (
 	"strings"
 )
 
+const (
+	fieldAssignedResourceID = "assignedResourceID"
+	fieldCompanyID          = "companyID"
+	fieldFirstName          = "firstName"
+	fieldLastName           = "lastName"
+	fieldProjectID          = "projectID"
+	fieldStatus             = "status"
+	fieldTitle              = "title"
+)
+
 // SummaryFields defines the essential fields to include in compact responses per entity type.
 var SummaryFields = map[string][]string{
-	"tickets":                   {"id", "ticketNumber", "title", "status", "priority", "companyID", "assignedResourceID", "createDate", "dueDateTime"},
+	"tickets":                   {"id", "ticketNumber", fieldTitle, fieldStatus, "priority", fieldCompanyID, fieldAssignedResourceID, "createDate", "dueDateTime"},
 	"companies":                 {"id", "companyName", "isActive", "phone", "city", "state"},
-	"contacts":                  {"id", "firstName", "lastName", "emailAddress", "companyID"},
-	"projects":                  {"id", "projectName", "status", "companyID", "projectLeadResourceID", "startDate", "endDate"},
-	"tasks":                     {"id", "title", "status", "projectID", "assignedResourceID", "percentComplete"},
-	"resources":                 {"id", "firstName", "lastName", "email", "isActive"},
-	"billingItems":              {"id", "itemName", "companyID", "ticketID", "projectID", "postedDate", "totalAmount", "invoiceID", "billingItemType"},
+	"contacts":                  {"id", fieldFirstName, fieldLastName, "emailAddress", fieldCompanyID},
+	"projects":                  {"id", "projectName", fieldStatus, fieldCompanyID, "projectLeadResourceID", "startDate", "endDate"},
+	"tasks":                     {"id", fieldTitle, fieldStatus, fieldProjectID, fieldAssignedResourceID, "percentComplete"},
+	"resources":                 {"id", fieldFirstName, fieldLastName, "email", "isActive"},
+	"billingItems":              {"id", "itemName", fieldCompanyID, "ticketID", fieldProjectID, "postedDate", "totalAmount", "invoiceID", "billingItemType"},
 	"billingItemApprovalLevels": {"id", "timeEntryID", "approvalLevel", "approvalResourceID", "approvalDateTime"},
-	"timeEntries":               {"id", "resourceID", "ticketID", "projectID", "taskID", "dateWorked", "hoursWorked", "summaryNotes"},
+	"timeEntries":               {"id", "resourceID", "ticketID", fieldProjectID, "taskID", "dateWorked", "hoursWorked", "summaryNotes"},
 }
 
 // FormatOptions controls result limits for compact responses.
@@ -39,13 +49,13 @@ type CompactResponse struct {
 
 // untrustedFields lists the known external user-supplied fields that must be framed.
 var untrustedFields = []string{
-	"description", "title", "note", "summaryNotes", "details",
+	"description", fieldTitle, "note", "summaryNotes", "details",
 	"problemDescription", "resolution", "internalNotes", "cause", "name",
 	"projectName", "companyName", "referenceTitle", "referenceName",
 	"fileName", "serviceName", "serviceBundleName",
 	// Short free-text identity fields that are also externally supplied
 	// (contacts are routinely auto-created from inbound customer email).
-	"firstName", "lastName", "emailAddress", "email", "itemName", "contractName",
+	fieldFirstName, fieldLastName, "emailAddress", "email", "itemName", "contractName",
 	// Derived reference names inlined from the _enhanced sub-map by pickSummaryFields;
 	// these carry the same customer-controlled text as their source *Name fields.
 	"company", "assignedTo", "resourceName", "projectLead",
@@ -95,24 +105,32 @@ func FrameUntrustedMapFields(m map[string]any) {
 	// Frame every string value so the get path matches the search path, which
 	// inlines and frames these same names via pickSummaryFields.
 	if enhanced, ok := m["_enhanced"].(map[string]any); ok {
-		for k, v := range enhanced {
-			if s, ok := v.(string); ok && s != "" {
-				enhanced[k] = FrameUntrustedContent(s)
-			}
-		}
+		frameEnhancedFields(enhanced)
 	}
 	// userDefinedFields is an array of {name, value} pairs whose value is
 	// free-form customer-controlled text. It is not a top-level string field, so
 	// frame each entry's value explicitly rather than leaving it unbounded.
 	if udfs, ok := m["userDefinedFields"].([]any); ok {
-		for _, u := range udfs {
-			udf, ok := u.(map[string]any)
-			if !ok {
-				continue
-			}
-			if v, ok := udf["value"].(string); ok && v != "" {
-				udf["value"] = FrameUntrustedContent(v)
-			}
+		frameUserDefinedFields(udfs)
+	}
+}
+
+func frameEnhancedFields(enhanced map[string]any) {
+	for k, v := range enhanced {
+		if s, ok := v.(string); ok && s != "" {
+			enhanced[k] = FrameUntrustedContent(s)
+		}
+	}
+}
+
+func frameUserDefinedFields(udfs []any) {
+	for _, u := range udfs {
+		udf, ok := u.(map[string]any)
+		if !ok {
+			continue
+		}
+		if v, ok := udf["value"].(string); ok && v != "" {
+			udf["value"] = FrameUntrustedContent(v)
 		}
 	}
 }

@@ -54,28 +54,37 @@ type UpdateTicketInput struct {
 	ContactID              int64  `json:"contactID,omitempty" jsonschema:"Contact ID for the ticket"`
 }
 
+const (
+	toolSearchTickets    = "autotask_search_tickets"
+	toolGetTicketDetails = "autotask_get_ticket_details"
+	toolCreateTicket     = "autotask_create_ticket"
+	toolUpdateTicket     = "autotask_update_ticket"
+
+	ticketStatusComplete = 5
+)
+
 // RegisterTicketTools registers all ticket-related MCP tools with the server.
 func RegisterTicketTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_tickets",
+		Name:        toolSearchTickets,
 		Description: "Find open tickets by company, status, assignee, unassigned flag, ticket-number prefix, or create/activity date range, returning a compact summary of matching records (up to maxResults, default 25, max 500). Excludes completed tickets (status 5) unless a status filter is given. Use this to locate tickets, then autotask_get_ticket_details for the full field set of one ticket. Read-only.",
 		Annotations: readOnlyTool("Search tickets"),
 	}, searchTicketsHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_ticket_details",
+		Name:        toolGetTicketDetails,
 		Description: "Retrieve the complete field set of one ticket by its numeric ID, with resolved names for status, company, and assignee. Use after autotask_search_tickets, which returns only a compact summary. Read-only.",
 		Annotations: readOnlyTool("Get ticket details"),
 	}, getTicketDetailsHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_ticket",
+		Name:        toolCreateTicket,
 		Description: "Open a service ticket for a company from a title and description, with optional status, priority, assignment, and contact. Requires companyID, title, and description; returns the created ticket including its new ID. To change an existing ticket use autotask_update_ticket instead. Writes to Autotask.",
 		Annotations: createTool("Create ticket"),
 	}, createTicketHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_update_ticket",
+		Name:        toolUpdateTicket,
 		Description: "Change fields on an existing ticket identified by ticketId; only the fields you supply are modified, the rest are left untouched. Use autotask_create_ticket to open a new ticket instead. Writes to Autotask.",
 		Annotations: updateTool("Update ticket"),
 	}, updateTicketHandler(client))
@@ -84,38 +93,8 @@ func RegisterTicketTools(s *mcp.Server, client *autotask.Client, mapper *service
 // searchTicketsHandler returns a handler that searches tickets using the provided filters.
 func searchTicketsHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
-
-		q := autotask.NewQuery().Limit(maxResults + 1)
-
-		// Default: exclude completed tickets (status 5) unless a specific status is requested.
-		if in.Status != 0 {
-			q.Where("status", autotask.OpEq, in.Status)
-		} else {
-			q.Where("status", autotask.OpNotEq, 5)
-		}
-
-		if in.SearchTerm != "" {
-			q.Where("ticketNumber", autotask.OpBeginsWith, in.SearchTerm)
-		}
-		if in.CompanyID != 0 {
-			q.Where("companyID", autotask.OpEq, in.CompanyID)
-		}
-		if in.AssignedResourceID != 0 {
-			q.Where("assignedResourceID", autotask.OpEq, in.AssignedResourceID)
-		}
-		if in.Unassigned {
-			q.Where("assignedResourceID", autotask.OpNotExist, nil)
-		}
-		if in.CreatedAfter != "" {
-			q.Where("createDate", autotask.OpGte, in.CreatedAfter)
-		}
-		if in.CreatedBefore != "" {
-			q.Where("createDate", autotask.OpLte, in.CreatedBefore)
-		}
-		if in.LastActivityAfter != "" {
-			q.Where("lastActivityDate", autotask.OpGte, in.LastActivityAfter)
-		}
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
+		q := buildSearchTicketsQuery(&in, maxResults)
 
 		tickets, err := autotask.List[entities.Ticket](ctx, client, q)
 		if err != nil {
@@ -131,8 +110,42 @@ func searchTicketsHandler(client *autotask.Client, mapper *services.MappingCache
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_tickets", maxResults)
+		return searchResult(ctx, mapper, maps, toolSearchTickets, maxResults)
 	}
+}
+
+func buildSearchTicketsQuery(in *SearchTicketsInput, maxResults int) *autotask.Query {
+	q := autotask.NewQuery().Limit(maxResults + 1)
+
+	// Default: exclude completed tickets (status 5) unless a specific status is requested.
+	if in.Status != 0 {
+		q.Where("status", autotask.OpEq, in.Status)
+	} else {
+		q.Where("status", autotask.OpNotEq, ticketStatusComplete)
+	}
+
+	if in.SearchTerm != "" {
+		q.Where("ticketNumber", autotask.OpBeginsWith, in.SearchTerm)
+	}
+	if in.CompanyID != 0 {
+		q.Where("companyID", autotask.OpEq, in.CompanyID)
+	}
+	if in.AssignedResourceID != 0 {
+		q.Where("assignedResourceID", autotask.OpEq, in.AssignedResourceID)
+	}
+	if in.Unassigned {
+		q.Where("assignedResourceID", autotask.OpNotExist, nil)
+	}
+	if in.CreatedAfter != "" {
+		q.Where("createDate", autotask.OpGte, in.CreatedAfter)
+	}
+	if in.CreatedBefore != "" {
+		q.Where("createDate", autotask.OpLte, in.CreatedBefore)
+	}
+	if in.LastActivityAfter != "" {
+		q.Where("lastActivityDate", autotask.OpGte, in.LastActivityAfter)
+	}
+	return q
 }
 
 // getTicketDetailsHandler returns a handler that retrieves a single ticket by ID.
@@ -202,37 +215,9 @@ func createTicketHandler(client *autotask.Client) func(ctx context.Context, req 
 // updateTicketHandler returns a handler that updates an existing ticket.
 func updateTicketHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in UpdateTicketInput) (*mcp.CallToolResult, map[string]any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in UpdateTicketInput) (*mcp.CallToolResult, map[string]any, error) {
-		ticket := &entities.Ticket{
-			ID: autotask.Set(in.TicketID),
-		}
-
-		if in.Title != "" {
-			ticket.Title = autotask.Set(in.Title)
-		}
-		if in.Description != "" {
-			ticket.Description = autotask.Set(in.Description)
-		}
-		if in.Status != 0 {
-			ticket.Status = autotask.Set(int64(in.Status))
-		}
-		if in.Priority != 0 {
-			ticket.Priority = autotask.Set(int64(in.Priority))
-		}
-		if in.AssignedResourceID != 0 {
-			ticket.AssignedResourceID = autotask.Set(in.AssignedResourceID)
-		}
-		if in.AssignedResourceRoleID != 0 {
-			ticket.AssignedResourceRoleID = autotask.Set(in.AssignedResourceRoleID)
-		}
-		if in.DueDateTime != "" {
-			t, err := parseDate(in.DueDateTime)
-			if err != nil {
-				return nil, nil, err
-			}
-			ticket.DueDateTime = autotask.Set(t)
-		}
-		if in.ContactID != 0 {
-			ticket.ContactID = autotask.Set(in.ContactID)
+		ticket, err := buildUpdateTicket(&in)
+		if err != nil {
+			return nil, nil, err
 		}
 
 		updated, err := autotask.Update[entities.Ticket](ctx, client, ticket)
@@ -247,4 +232,41 @@ func updateTicketHandler(client *autotask.Client) func(ctx context.Context, req 
 
 		return nil, m, nil
 	}
+}
+
+func buildUpdateTicket(in *UpdateTicketInput) (*entities.Ticket, error) {
+	ticket := &entities.Ticket{
+		ID: autotask.Set(in.TicketID),
+	}
+
+	if in.Title != "" {
+		ticket.Title = autotask.Set(in.Title)
+	}
+	if in.Description != "" {
+		ticket.Description = autotask.Set(in.Description)
+	}
+	if in.Status != 0 {
+		ticket.Status = autotask.Set(int64(in.Status))
+	}
+	if in.Priority != 0 {
+		ticket.Priority = autotask.Set(int64(in.Priority))
+	}
+	if in.AssignedResourceID != 0 {
+		ticket.AssignedResourceID = autotask.Set(in.AssignedResourceID)
+	}
+	if in.AssignedResourceRoleID != 0 {
+		ticket.AssignedResourceRoleID = autotask.Set(in.AssignedResourceRoleID)
+	}
+	if in.DueDateTime != "" {
+		t, err := parseDate(in.DueDateTime)
+		if err != nil {
+			return nil, err
+		}
+		ticket.DueDateTime = autotask.Set(t)
+	}
+	if in.ContactID != 0 {
+		ticket.ContactID = autotask.Set(in.ContactID)
+	}
+
+	return ticket, nil
 }

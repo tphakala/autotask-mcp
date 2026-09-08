@@ -1,7 +1,6 @@
 package prompts
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -12,7 +11,7 @@ import (
 // and connected to an MCP client.
 func setupPromptTest(t *testing.T) *mcp.ClientSession {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "prompts-test", Version: "v0.0.1"}, nil)
 	RegisterAll(server)
@@ -55,7 +54,7 @@ func promptText(t *testing.T, res *mcp.GetPromptResult) string {
 
 func TestListPrompts_RegistersAllFour(t *testing.T) {
 	cs := setupPromptTest(t)
-	res, err := cs.ListPrompts(context.Background(), nil)
+	res, err := cs.ListPrompts(t.Context(), nil)
 	if err != nil {
 		t.Fatalf("ListPrompts: %v", err)
 	}
@@ -95,7 +94,7 @@ func TestListPrompts_RegistersAllFour(t *testing.T) {
 
 func TestGetPrompt_TriageByID(t *testing.T) {
 	cs := setupPromptTest(t)
-	res, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+	res, err := cs.GetPrompt(t.Context(), &mcp.GetPromptParams{
 		Name:      "autotask_triage_ticket",
 		Arguments: map[string]string{"ticketId": "778899"},
 	})
@@ -112,7 +111,7 @@ func TestGetPrompt_TriageByID(t *testing.T) {
 
 func TestGetPrompt_TriageByDescription(t *testing.T) {
 	cs := setupPromptTest(t)
-	res, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+	res, err := cs.GetPrompt(t.Context(), &mcp.GetPromptParams{
 		Name:      "autotask_triage_ticket",
 		Arguments: map[string]string{"description": "VPN keeps dropping every hour"},
 	})
@@ -133,7 +132,7 @@ func TestGetPrompt_TriageByDescription(t *testing.T) {
 
 func TestGetPrompt_TriageRequiresOneArgument(t *testing.T) {
 	cs := setupPromptTest(t)
-	_, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+	_, err := cs.GetPrompt(t.Context(), &mcp.GetPromptParams{
 		Name:      "autotask_triage_ticket",
 		Arguments: map[string]string{},
 	})
@@ -144,7 +143,7 @@ func TestGetPrompt_TriageRequiresOneArgument(t *testing.T) {
 
 func TestGetPrompt_SummarizeEmbedsArgsAndTools(t *testing.T) {
 	cs := setupPromptTest(t)
-	res, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+	res, err := cs.GetPrompt(t.Context(), &mcp.GetPromptParams{
 		Name:      "autotask_summarize_ticket",
 		Arguments: map[string]string{"ticketId": "424242"},
 	})
@@ -161,7 +160,7 @@ func TestGetPrompt_SummarizeEmbedsArgsAndTools(t *testing.T) {
 
 func TestGetPrompt_SummarizeMissingRequiredArg(t *testing.T) {
 	cs := setupPromptTest(t)
-	_, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+	_, err := cs.GetPrompt(t.Context(), &mcp.GetPromptParams{
 		Name:      "autotask_summarize_ticket",
 		Arguments: map[string]string{},
 	})
@@ -172,7 +171,7 @@ func TestGetPrompt_SummarizeMissingRequiredArg(t *testing.T) {
 
 func TestGetPrompt_DraftTimeEntryEmbedsAllInputs(t *testing.T) {
 	cs := setupPromptTest(t)
-	res, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+	res, err := cs.GetPrompt(t.Context(), &mcp.GetPromptParams{
 		Name: "autotask_draft_time_entry",
 		Arguments: map[string]string{
 			"ticketId":    "5150",
@@ -197,7 +196,7 @@ func TestGetPrompt_DraftTimeEntryEmbedsAllInputs(t *testing.T) {
 
 func TestGetPrompt_DraftTimeEntryMissingArg(t *testing.T) {
 	cs := setupPromptTest(t)
-	_, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+	_, err := cs.GetPrompt(t.Context(), &mcp.GetPromptParams{
 		Name:      "autotask_draft_time_entry",
 		Arguments: map[string]string{"ticketId": "5150", "hoursWorked": "2.5"}, // summary missing
 	})
@@ -208,7 +207,7 @@ func TestGetPrompt_DraftTimeEntryMissingArg(t *testing.T) {
 
 func TestGetPrompt_WeeklyTimesheetEmbedsRange(t *testing.T) {
 	cs := setupPromptTest(t)
-	res, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+	res, err := cs.GetPrompt(t.Context(), &mcp.GetPromptParams{
 		Name: "autotask_weekly_timesheet_review",
 		Arguments: map[string]string{
 			"resourceId": "312",
@@ -232,7 +231,7 @@ func TestGetPrompt_WeeklyTimesheetEmbedsRange(t *testing.T) {
 // registered), via autotask_execute_tool.
 func TestPrompts_LazyModeRoutingHint(t *testing.T) {
 	cs := setupPromptTest(t)
-	res, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+	res, err := cs.GetPrompt(t.Context(), &mcp.GetPromptParams{
 		Name:      "autotask_summarize_ticket",
 		Arguments: map[string]string{"ticketId": "1"},
 	})
@@ -249,7 +248,7 @@ func TestPrompts_LazyModeRoutingHint(t *testing.T) {
 // autotask_search_companies instead.
 func TestPrompts_ReferenceOnlyRealCompanyTool(t *testing.T) {
 	cs := setupPromptTest(t)
-	res, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{
+	res, err := cs.GetPrompt(t.Context(), &mcp.GetPromptParams{
 		Name:      "autotask_triage_ticket",
 		Arguments: map[string]string{"ticketId": "1"},
 	})
