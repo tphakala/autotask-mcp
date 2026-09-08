@@ -5,6 +5,7 @@ go 1.27.0
 require (
 	github.com/google/jsonschema-go v0.4.3
 	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	github.com/tphakala/go-autotask v1.5.1
 	golang.org/x/sync v0.22.0
 )

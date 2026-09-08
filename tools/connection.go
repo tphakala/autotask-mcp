@@ -8,10 +8,12 @@ import (
 	"github.com/tphakala/go-autotask/metadata"
 )
 
+const toolTestConnection = "autotask_test_connection"
+
 // RegisterConnectionTools registers the connection test MCP tool with the server.
 func RegisterConnectionTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_test_connection",
+		Name:        toolTestConnection,
 		Description: "Verify that the configured Autotask API credentials authenticate by fetching entity metadata for the Tickets entity, and report its canCreate, canUpdate, and canQuery permission flags. Takes no arguments; use this first to confirm connectivity and permissions before calling data tools such as autotask_search_tickets. Read-only.",
 		Annotations: readOnlyTool("Test connection"),
 	}, testConnectionHandler(client))

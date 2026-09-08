@@ -45,40 +45,49 @@ type SearchServiceBundlesInput struct {
 	MaxResults int    `json:"maxResults,omitempty" jsonschema:"Maximum results to return (default 25, max 500)"`
 }
 
+const (
+	toolGetProduct           = "autotask_get_product"
+	toolSearchProducts       = "autotask_search_products"
+	toolGetService           = "autotask_get_service"
+	toolSearchServices       = "autotask_search_services"
+	toolGetServiceBundle     = "autotask_get_service_bundle"
+	toolSearchServiceBundles = "autotask_search_service_bundles"
+)
+
 // RegisterSalesTools registers all sales-related MCP tools with the server.
 func RegisterSalesTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_product",
+		Name:        toolGetProduct,
 		Description: "Retrieve one catalog product by its numeric ID, returning the full field set. A product is a one-off sellable item such as hardware, a software license, or materials. Use when you already have a product ID; to find products by name or active status use autotask_search_products instead. Read-only.",
 		Annotations: readOnlyTool("Get product"),
 	}, getProductHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_products",
+		Name:        toolSearchProducts,
 		Description: "Find catalog products (one-off sellable items such as hardware, licenses, or materials) by name substring and active status, returning up to maxResults (default 25, max 500). Use this to locate a product, then autotask_get_product for the full field set of one by ID. Distinct from autotask_search_services, which lists recurring billable services rather than one-off products. Read-only.",
 		Annotations: readOnlyTool("Search products"),
 	}, searchProductsHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_service",
+		Name:        toolGetService,
 		Description: "Retrieve one catalog service by its numeric ID, returning the full field set. A service is a recurring, periodically billed offering, unlike a one-off product. Use when you already have a service ID; to find services by name or active status use autotask_search_services instead. Read-only.",
 		Annotations: readOnlyTool("Get service"),
 	}, getServiceHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_services",
+		Name:        toolSearchServices,
 		Description: "Find recurring billable services by name substring and active status, returning up to maxResults (default 25, max 500). Services are periodically billed offerings, unlike one-off products (autotask_search_products) or grouped service bundles (autotask_search_service_bundles). Use this to locate a service, then autotask_get_service for the full field set of one by ID. Read-only.",
 		Annotations: readOnlyTool("Search services"),
 	}, searchServicesHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_service_bundle",
+		Name:        toolGetServiceBundle,
 		Description: "Retrieve one service bundle by its numeric ID, returning the full field set. A service bundle groups several individual services sold together as a single line item. Use when you already have a bundle ID; to find bundles by name or active status use autotask_search_service_bundles instead. Read-only.",
 		Annotations: readOnlyTool("Get service bundle"),
 	}, getServiceBundleHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_service_bundles",
+		Name:        toolSearchServiceBundles,
 		Description: "Find service bundles (groups of individual services sold together as one line item) by name substring and active status, returning up to maxResults (default 25, max 500). Use this to locate a bundle, then autotask_get_service_bundle for the full field set of one by ID; for the individual services that make up bundles see autotask_search_services. Read-only.",
 		Annotations: readOnlyTool("Search service bundles"),
 	}, searchServiceBundlesHandler(client))
@@ -104,7 +113,7 @@ func getProductHandler(client *autotask.Client) func(ctx context.Context, req *m
 // searchProductsHandler returns a handler that searches products.
 func searchProductsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchProductsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchProductsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
@@ -128,7 +137,7 @@ func searchProductsHandler(client *autotask.Client) func(ctx context.Context, re
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_products", maxResults)
+		return searchResult(ctx, nil, maps, toolSearchProducts, maxResults)
 	}
 }
 
@@ -152,7 +161,7 @@ func getServiceHandler(client *autotask.Client) func(ctx context.Context, req *m
 // searchServicesHandler returns a handler that searches services.
 func searchServicesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchServicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchServicesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
@@ -176,7 +185,7 @@ func searchServicesHandler(client *autotask.Client) func(ctx context.Context, re
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_services", maxResults)
+		return searchResult(ctx, nil, maps, toolSearchServices, maxResults)
 	}
 }
 
@@ -200,7 +209,7 @@ func getServiceBundleHandler(client *autotask.Client) func(ctx context.Context, 
 // searchServiceBundlesHandler returns a handler that searches service bundles.
 func searchServiceBundlesHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchServiceBundlesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchServiceBundlesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 500)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitLarge)
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
 		if in.SearchTerm != "" {
@@ -224,6 +233,6 @@ func searchServiceBundlesHandler(client *autotask.Client) func(ctx context.Conte
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, nil, maps, "autotask_search_service_bundles", maxResults)
+		return searchResult(ctx, nil, maps, toolSearchServiceBundles, maxResults)
 	}
 }

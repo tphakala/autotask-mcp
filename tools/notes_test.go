@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -22,7 +21,7 @@ func TestRegisterNoteTools_NoPanic(t *testing.T) {
 // TestSearchTicketNotesHandler_NoNotes tests searching ticket notes on an empty server.
 func TestSearchTicketNotesHandler_NoNotes(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_ticket_notes",
@@ -52,7 +51,7 @@ func TestSearchTicketNotesHandler_NoNotes(t *testing.T) {
 func TestSearchTicketNotesHandler_WithNotes(t *testing.T) {
 	note := autotasktest.TicketNoteFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(note))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_ticket_notes",
@@ -81,7 +80,7 @@ func TestSearchTicketNotesHandler_TruncationAndFraming(t *testing.T) {
 		n.Title = autotask.Set("Untrusted Note Title")
 	})
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(note))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_ticket_notes",
@@ -136,11 +135,11 @@ func TestSearchTicketNotesHandler_TruncationAndFraming(t *testing.T) {
 // hasMore. It pins the bounded-fetch contract: the caller sees only the capped set.
 func TestSearchTicketNotesHandler_BoundedByMaxResults(t *testing.T) {
 	notes := make([]entities.TicketNote, 0, 5)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		notes = append(notes, autotasktest.TicketNoteFixture())
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(notes...))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_ticket_notes",
@@ -177,11 +176,11 @@ func TestSearchTicketNotesHandler_BoundedByMaxResults(t *testing.T) {
 // fully buffered slice), a false positive the bounded peek-one-extra fetch removes.
 func TestSearchTicketNotesHandler_ExactCountReportsNoMore(t *testing.T) {
 	notes := make([]entities.TicketNote, 0, 3)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		notes = append(notes, autotasktest.TicketNoteFixture())
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(notes...))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_ticket_notes",
@@ -209,7 +208,7 @@ func TestSearchTicketNotesHandler_ExactCountReportsNoMore(t *testing.T) {
 // TestGetTicketNoteHandler_NotFound tests that a missing note returns an error result over wire.
 func TestGetTicketNoteHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_ticket_note",
@@ -233,7 +232,7 @@ func TestGetTicketNoteHandler_Success(t *testing.T) {
 		t.Fatal("fixture note has no ID")
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(note))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_ticket_note",
@@ -262,7 +261,7 @@ func TestGetTicketNoteHandler_Success(t *testing.T) {
 // TestCreateTicketNoteHandler_Success tests creating a ticket note over wire.
 func TestCreateTicketNoteHandler_Success(t *testing.T) {
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.TicketNoteFixture()))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_ticket_note",
@@ -294,7 +293,7 @@ func TestCreateTicketNoteHandler_Success(t *testing.T) {
 func TestSearchProjectNotesHandler_BoundedAndExactCount(t *testing.T) {
 	seed := func(n int) []entities.ProjectNote {
 		notes := make([]entities.ProjectNote, 0, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			notes = append(notes, entities.ProjectNote{ID: autotask.Set(int64(4000 + i))})
 		}
 		return notes
@@ -320,7 +319,7 @@ func TestSearchProjectNotesHandler_BoundedAndExactCount(t *testing.T) {
 func TestSearchCompanyNotesHandler_BoundedAndExactCount(t *testing.T) {
 	seed := func(n int) []entities.CompanyNote {
 		notes := make([]entities.CompanyNote, 0, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			notes = append(notes, entities.CompanyNote{ID: autotask.Set(int64(5000 + i))})
 		}
 		return notes
@@ -340,9 +339,9 @@ func TestSearchCompanyNotesHandler_BoundedAndExactCount(t *testing.T) {
 }
 
 // callSearchNotes invokes a child-note search tool and returns its compact response.
-func callSearchNotes(t *testing.T, cs *mcp.ClientSession, tool, idField string, maxResults int) services.CompactResponse {
+func callSearchNotes(t *testing.T, cs *mcp.ClientSession, tool, idField string, maxResults int) services.CompactResponse { //nolint:unparam // maxResults is explicit at call sites for test readability and pagination boundary assertions
 	t.Helper()
-	result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+	result, err := cs.CallTool(t.Context(), &mcp.CallToolParams{
 		Name: tool,
 		Arguments: map[string]any{
 			idField:      3001,
@@ -361,7 +360,7 @@ func callSearchNotes(t *testing.T, cs *mcp.ClientSession, tool, idField string, 
 // TestGetProjectNoteHandler_NotFound tests that a missing project note returns an error result over wire.
 func TestGetProjectNoteHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_project_note",
@@ -380,7 +379,7 @@ func TestGetProjectNoteHandler_NotFound(t *testing.T) {
 // TestSearchProjectNotesHandler_NoNotes tests searching project notes on an empty server.
 func TestSearchProjectNotesHandler_NoNotes(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_project_notes",
@@ -404,7 +403,7 @@ func TestSearchProjectNotesHandler_NoNotes(t *testing.T) {
 // TestSearchCompanyNotesHandler_NoNotes tests searching company notes on an empty server.
 func TestSearchCompanyNotesHandler_NoNotes(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_company_notes",
@@ -433,7 +432,7 @@ func TestCreateProjectNoteHandler_Success(t *testing.T) {
 		t.Fatal("fixture project has no ID")
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(proj))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_project_note",
@@ -465,7 +464,7 @@ func TestCreateCompanyNoteHandler_Success(t *testing.T) {
 		t.Fatal("fixture company has no ID")
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(comp))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_company_note",

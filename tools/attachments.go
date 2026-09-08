@@ -9,6 +9,11 @@ import (
 	"github.com/tphakala/go-autotask/entities"
 )
 
+const (
+	toolGetTicketAttachment     = "autotask_get_ticket_attachment"
+	toolSearchTicketAttachments = "autotask_search_ticket_attachments"
+)
+
 // GetTicketAttachmentInput defines the input parameters for getting a ticket attachment.
 type GetTicketAttachmentInput struct {
 	AttachmentID int64 `json:"attachmentId" jsonschema:"Attachment ID to retrieve"`
@@ -24,13 +29,13 @@ type SearchTicketAttachmentsInput struct {
 // RegisterAttachmentTools registers all attachment-related MCP tools with the server.
 func RegisterAttachmentTools(s *mcp.Server, client *autotask.Client) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_get_ticket_attachment",
+		Name:        toolGetTicketAttachment,
 		Description: "Retrieve one ticket attachment by its numeric attachment ID. Returns attachment metadata by default (title, file size, content type); set includeData=true to retrieve raw base64 file data. Read-only.",
 		Annotations: readOnlyTool("Get ticket attachment"),
 	}, getTicketAttachmentHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_ticket_attachments",
+		Name:        toolSearchTicketAttachments,
 		Description: "List attachments belonging to one ticket by ticketId, returning up to maxResults metadata records (default 25, max 100) with base64 data and internal file paths omitted. Read-only.",
 		Annotations: readOnlyTool("Search ticket attachments"),
 	}, searchTicketAttachmentsHandler(client))
@@ -61,7 +66,7 @@ func getTicketAttachmentHandler(client *autotask.Client) func(ctx context.Contex
 // searchTicketAttachmentsHandler returns a handler that lists attachments for a ticket without heavy base64 data.
 func searchTicketAttachmentsHandler(client *autotask.Client) func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketAttachmentsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchTicketAttachmentsInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 100)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitSmall)
 		attachments, hasMore, err := collectBoundedChildRaw(
 			autotask.ListChildRawIter(ctx, client, "Tickets", in.TicketID, "TicketAttachments"), maxResults)
 		if err != nil {
@@ -79,7 +84,7 @@ func searchTicketAttachmentsHandler(client *autotask.Client) func(ctx context.Co
 
 		hint := ""
 		if hasMore {
-			hint = "Maximum result limit reached. Use narrower search filters to find specific records."
+			hint = maxResultsHint
 		}
 
 		return nil, services.CompactResponse{

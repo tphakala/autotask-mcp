@@ -41,22 +41,28 @@ type UpdateCompanyInput struct {
 	IsActive    *bool  `json:"isActive,omitempty" jsonschema:"Whether the company is active"`
 }
 
+const (
+	toolSearchCompanies = "autotask_search_companies"
+	toolCreateCompany   = "autotask_create_company"
+	toolUpdateCompany   = "autotask_update_company"
+)
+
 // RegisterCompanyTools registers all company-related MCP tools with the server.
 func RegisterCompanyTools(s *mcp.Server, client *autotask.Client, mapper *services.MappingCache) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_search_companies",
+		Name:        toolSearchCompanies,
 		Description: "Find companies by name substring and active status, returning a compact summary of matching records (up to maxResults, default 25, max 200). Use this to locate a company and its ID for other tools; to add a new company instead use autotask_create_company. Omitting the active filter returns both active and inactive companies. Read-only.",
 		Annotations: readOnlyTool("Search companies"),
 	}, searchCompaniesHandler(client, mapper))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_create_company",
+		Name:        toolCreateCompany,
 		Description: "Add a new company record from a company name and a numeric company-type ID, with optional phone, address, owner resource, and active flag. Requires companyName and companyType; returns the created company including its new ID. To change an existing company use autotask_update_company instead. Writes to Autotask.",
 		Annotations: createTool("Create company"),
 	}, createCompanyHandler(client))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "autotask_update_company",
+		Name:        toolUpdateCompany,
 		Description: "Change fields on an existing company identified by id; only the fields you supply (name, phone, address, or active flag) are modified, the rest are left untouched. Use autotask_create_company to add a new company instead. Writes to Autotask.",
 		Annotations: updateTool("Update company"),
 	}, updateCompanyHandler(client))
@@ -65,7 +71,7 @@ func RegisterCompanyTools(s *mcp.Server, client *autotask.Client, mapper *servic
 // searchCompaniesHandler returns a handler that searches companies using the provided filters.
 func searchCompaniesHandler(client *autotask.Client, mapper *services.MappingCache) func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompaniesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchCompaniesInput) (*mcp.CallToolResult, services.CompactResponse, error) {
-		maxResults := defaultMaxResults(in.MaxResults, 25, 200)
+		maxResults := defaultMaxResults(in.MaxResults, defaultResultLimit, maxResultLimitMedium)
 
 		q := autotask.NewQuery().Limit(maxResults + 1)
 
@@ -90,7 +96,7 @@ func searchCompaniesHandler(client *autotask.Client, mapper *services.MappingCac
 			return nil, services.CompactResponse{}, err
 		}
 
-		return searchResult(ctx, mapper, maps, "autotask_search_companies", maxResults)
+		return searchResult(ctx, mapper, maps, toolSearchCompanies, maxResults)
 	}
 }
 

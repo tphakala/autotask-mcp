@@ -186,13 +186,13 @@ func TestFrameUntrustedMapFields(t *testing.T) {
 
 	FrameUntrustedMapFields(m)
 
-	if got := m["title"].(string); !strings.Contains(got, "<untrusted_content>") {
+	if got := m["title"].(string); !strings.Contains(got, "<untrusted_content>") { //nolint:forcetypeassert // test asserts a known concrete type; a wrong type should fail the test loudly
 		t.Errorf("expected title to be framed, got %q", got)
 	}
-	if got := m["description"].(string); !strings.Contains(got, "<untrusted_content>") {
+	if got := m["description"].(string); !strings.Contains(got, "<untrusted_content>") { //nolint:forcetypeassert // test asserts a known concrete type; a wrong type should fail the test loudly
 		t.Errorf("expected description to be framed, got %q", got)
 	}
-	if got := m["other"].(string); strings.Contains(got, "<untrusted_content>") {
+	if got := m["other"].(string); strings.Contains(got, "<untrusted_content>") { //nolint:forcetypeassert // test asserts a known concrete type; a wrong type should fail the test loudly
 		t.Errorf("expected other to NOT be framed, got %q", got)
 	}
 }

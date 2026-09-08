@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,8 +13,15 @@ import (
 	"github.com/tphakala/go-autotask/metadata"
 )
 
+const (
+	doctorMaxConcurrency = 2
+	doctorConnectTimeout = 15 * time.Second
+	doctorDividerWidth   = 60
+	doctorEntityTimeout  = 10 * time.Second
+)
+
 // runDoctor executes comprehensive configuration, connectivity, and entity permission checks.
-func runDoctor(ctx context.Context, cfg Config, out io.Writer) error {
+func runDoctor(ctx context.Context, cfg *Config, out io.Writer) error {
 	if out == nil {
 		out = os.Stdout
 	}
@@ -33,7 +41,7 @@ func runDoctor(ctx context.Context, cfg Config, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close() //nolint:errcheck
+	defer client.Close() //nolint:errcheck // best-effort close of the diagnostic client on exit
 
 	// Step 3: Core Entity Permissions Diagnostic
 	allPermsOk := checkPermissionsDoctor(ctx, client, ticketInfo, out)
@@ -50,7 +58,7 @@ func runDoctor(ctx context.Context, cfg Config, out io.Writer) error {
 	return nil
 }
 
-func checkConfigDoctor(cfg Config, out io.Writer) error {
+func checkConfigDoctor(cfg *Config, out io.Writer) error {
 	_, _ = fmt.Fprintln(out, "[1/3] Configuration & Credentials Check")
 	_, _ = fmt.Fprintln(out, "------------------------------------------------------------")
 
@@ -60,7 +68,7 @@ func checkConfigDoctor(cfg Config, out io.Writer) error {
 		_, _ = fmt.Fprintln(out, "Config File Status: Loaded successfully")
 		if info, err := os.Stat(cfg.ConfigFile); err == nil {
 			perm := info.Mode().Perm()
-			if perm&0077 == 0 {
+			if perm&0o077 == 0 {
 				_, _ = fmt.Fprintf(out, "File Permissions:   0%o (Secure - owner read/write only)\n", perm)
 			} else {
 				_, _ = fmt.Fprintf(out, "File Permissions:   0%o (WARNING: Recommend 0600)\n", perm)
@@ -71,11 +79,12 @@ func checkConfigDoctor(cfg Config, out io.Writer) error {
 	}
 
 	printCredStatus := func(name, val, envKey string) {
-		if val == "" {
+		switch {
+		case val == "":
 			_, _ = fmt.Fprintf(out, "  - %-24s [MISSING]\n", name+":")
-		} else if os.Getenv(envKey) != "" {
+		case os.Getenv(envKey) != "":
 			_, _ = fmt.Fprintf(out, "  - %-24s [OK] (from env $%s)\n", name+":", envKey)
-		} else {
+		default:
 			_, _ = fmt.Fprintf(out, "  - %-24s [OK] (from config file)\n", name+":")
 		}
 	}
@@ -104,12 +113,12 @@ func checkConfigDoctor(cfg Config, out io.Writer) error {
 		_, _ = fmt.Fprintln(out, "     autotask-mcp config set secret \"your-api-secret\"")
 		_, _ = fmt.Fprintln(out, "     autotask-mcp config set integration_code \"your-integration-code\"")
 		_, _ = fmt.Fprintln(out)
-		return fmt.Errorf("missing required credentials")
+		return errors.New("missing required credentials")
 	}
 	return nil
 }
 
-func checkConnectivityDoctor(ctx context.Context, cfg Config, out io.Writer) (*autotask.Client, *metadata.EntityInfo, error) {
+func checkConnectivityDoctor(ctx context.Context, cfg *Config, out io.Writer) (*autotask.Client, *metadata.EntityInfo, error) {
 	_, _ = fmt.Fprintln(out, "[2/3] API Connectivity & Authentication Check")
 	_, _ = fmt.Fprintln(out, "------------------------------------------------------------")
 
@@ -119,7 +128,7 @@ func checkConnectivityDoctor(ctx context.Context, cfg Config, out io.Writer) (*a
 		IntegrationCode: cfg.IntegrationCode,
 	}
 	clientOpts := []autotask.ClientOption{
-		autotask.WithMaxConcurrency(2),
+		autotask.WithMaxConcurrency(doctorMaxConcurrency),
 		autotask.WithRateLimiter(),
 		autotask.WithCircuitBreaker(),
 	}
@@ -127,7 +136,7 @@ func checkConnectivityDoctor(ctx context.Context, cfg Config, out io.Writer) (*a
 		clientOpts = append(clientOpts, autotask.WithBaseURL(cfg.APIURL))
 	}
 
-	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	connectCtx, cancel := context.WithTimeout(ctx, doctorConnectTimeout)
 	defer cancel()
 
 	startTime := time.Now()
@@ -166,7 +175,7 @@ func checkPermissionsDoctor(ctx context.Context, client *autotask.Client, ticket
 	_, _ = fmt.Fprintln(out, "[3/3] Core Entity Permissions Check")
 	_, _ = fmt.Fprintln(out, "------------------------------------------------------------")
 	_, _ = fmt.Fprintf(out, "%-16s %-12s %-12s %-12s %-12s\n", "Entity", "canCreate", "canUpdate", "canQuery", "canDelete")
-	_, _ = fmt.Fprintln(out, strings.Repeat("-", 60))
+	_, _ = fmt.Fprintln(out, strings.Repeat("-", doctorDividerWidth))
 
 	coreEntities := []string{"Tickets", "Companies", "Contacts", "TimeEntries", "Resources"}
 	allPermsOk := true
@@ -179,7 +188,7 @@ func checkPermissionsDoctor(ctx context.Context, client *autotask.Client, ticket
 		if entity == "Tickets" && ticketInfo != nil {
 			info = ticketInfo
 		} else {
-			reqCtx, reqCancel := context.WithTimeout(ctx, 10*time.Second)
+			reqCtx, reqCancel := context.WithTimeout(ctx, doctorEntityTimeout)
 			info, err = metadata.GetEntityInfo(reqCtx, client, entity)
 			reqCancel()
 			if err != nil || info == nil {
@@ -206,7 +215,7 @@ func checkPermissionsDoctor(ctx context.Context, client *autotask.Client, ticket
 }
 
 // printActionableStartupError writes actionable guidance to stderr when the server fails to start.
-func printActionableStartupError(err error, cfg Config) {
+func printActionableStartupError(err error, cfg *Config) {
 	_, _ = fmt.Fprintln(os.Stderr, "autotask-mcp: startup failed:", err)
 	_, _ = fmt.Fprintln(os.Stderr)
 	if cfg.Username == "" || cfg.Secret == "" || cfg.IntegrationCode == "" {

@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -23,7 +22,7 @@ func TestRegisterCompanyTools_NoPanic(t *testing.T) {
 // TestSearchCompaniesHandler_ReturnsNoCompaniesFound tests the empty-result case over wire.
 func TestSearchCompaniesHandler_ReturnsNoCompaniesFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_companies",
@@ -49,7 +48,7 @@ func TestSearchCompaniesHandler_ReturnsNoCompaniesFound(t *testing.T) {
 func TestSearchCompaniesHandler_ReturnsCompanies(t *testing.T) {
 	company := autotasktest.CompanyFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(company))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_companies",
@@ -77,7 +76,7 @@ func TestSearchCompaniesHandler_ReturnsCompanies(t *testing.T) {
 // TestCreateCompanyHandler_Success tests creating a company over wire.
 func TestCreateCompanyHandler_Success(t *testing.T) {
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.CompanyFixture()))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_company",
@@ -111,7 +110,7 @@ func TestUpdateCompanyHandler_Success(t *testing.T) {
 	}
 
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(company))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_update_company",
@@ -138,7 +137,7 @@ func TestUpdateCompanyHandler_Success(t *testing.T) {
 func TestSearchCompaniesHandler_WithFilters(t *testing.T) {
 	company := autotasktest.CompanyFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(company))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	active := true
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{

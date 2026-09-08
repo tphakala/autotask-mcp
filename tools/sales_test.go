@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -22,7 +21,7 @@ func TestRegisterSalesTools_NoPanic(t *testing.T) {
 // TestGetProductHandler_NotFound tests that a missing product returns an error result over wire.
 func TestGetProductHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_product",
@@ -47,7 +46,7 @@ func TestGetProductHandler_Success(t *testing.T) {
 		IsActive:    autotask.Set(true),
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(prod))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_product",
@@ -72,7 +71,7 @@ func TestGetProductHandler_Success(t *testing.T) {
 // TestSearchProductsHandler_NoResults tests the empty-result case over wire.
 func TestSearchProductsHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_products",
@@ -99,7 +98,7 @@ func TestSearchProductsHandler_WithFilters(t *testing.T) {
 		IsActive: autotask.Set(true),
 	}
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(prod))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	active := true
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
@@ -126,7 +125,7 @@ func TestSearchProductsHandler_WithFilters(t *testing.T) {
 // TestGetServiceHandler_NotFound tests that a missing service returns an error result over wire.
 func TestGetServiceHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_service",
@@ -145,7 +144,7 @@ func TestGetServiceHandler_NotFound(t *testing.T) {
 // TestSearchServicesHandler_NoResults tests the empty-result case over wire.
 func TestSearchServicesHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_services",
@@ -167,7 +166,7 @@ func TestSearchServicesHandler_NoResults(t *testing.T) {
 // TestGetServiceBundleHandler_NotFound tests that a missing service bundle returns an error result over wire.
 func TestGetServiceBundleHandler_NotFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_get_service_bundle",
@@ -186,7 +185,7 @@ func TestGetServiceBundleHandler_NotFound(t *testing.T) {
 // TestSearchServiceBundlesHandler_NoResults tests the empty-result case over wire.
 func TestSearchServiceBundlesHandler_NoResults(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_service_bundles",

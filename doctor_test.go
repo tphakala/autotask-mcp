@@ -13,7 +13,7 @@ func TestRunDoctor_MissingCredentials(t *testing.T) {
 	cfg := Config{}
 	var buf bytes.Buffer
 
-	err := runDoctor(context.Background(), cfg, &buf)
+	err := runDoctor(t.Context(), &cfg, &buf)
 	if err == nil {
 		t.Fatal("expected error for missing credentials")
 	}
@@ -44,7 +44,7 @@ func TestRunDoctor_SuccessWithMockServer(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err := runDoctor(context.Background(), cfg, &buf)
+	err := runDoctor(t.Context(), &cfg, &buf)
 	if err != nil {
 		t.Fatalf("runDoctor failed: %v", err)
 	}
@@ -61,10 +61,10 @@ func TestRunDoctor_SuccessWithMockServer(t *testing.T) {
 	}
 }
 
-func TestPrintActionableStartupError(t *testing.T) {
+func TestPrintActionableStartupError(t *testing.T) { //nolint:unparam // t is required for the go test runner signature
 	// Should not panic
-	printActionableStartupError(context.Canceled, Config{})
-	printActionableStartupError(context.Canceled, Config{
+	printActionableStartupError(context.Canceled, &Config{})
+	printActionableStartupError(context.Canceled, &Config{
 		Username:        "u",
 		Secret:          "s",
 		IntegrationCode: "c",

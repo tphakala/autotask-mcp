@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -14,7 +13,7 @@ import (
 // setupWireTest sets up a full in-memory MCP server with all tools registered and connected to an MCP client.
 func setupWireTest(t *testing.T, opts ...autotasktest.ServerOption) (*mcp.ClientSession, *autotask.Client) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, client := autotasktest.NewServer(t, opts...)
 	mapper := services.NewMappingCache(client)
@@ -42,9 +41,9 @@ func setupWireTest(t *testing.T, opts ...autotasktest.ServerOption) (*mcp.Client
 }
 
 // setupLazyWireTest sets up a lazy-loading in-memory MCP server with meta-tools registered.
-func setupLazyWireTest(t *testing.T, opts ...autotasktest.ServerOption) (*mcp.ClientSession, *autotask.Client) {
+func setupLazyWireTest(t *testing.T, opts ...autotasktest.ServerOption) (*mcp.ClientSession, *autotask.Client) { //nolint:unparam // signature matches setupWireTest for symmetry
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, client := autotasktest.NewServer(t, opts...)
 	mapper := services.NewMappingCache(client)

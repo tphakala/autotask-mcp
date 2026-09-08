@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -23,7 +22,7 @@ func TestRegisterProjectTools_NoPanic(t *testing.T) {
 // TestSearchProjectsHandler_ReturnsNoProjectsFound tests the empty-result case over wire.
 func TestSearchProjectsHandler_ReturnsNoProjectsFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_projects",
@@ -49,7 +48,7 @@ func TestSearchProjectsHandler_ReturnsNoProjectsFound(t *testing.T) {
 func TestSearchProjectsHandler_ReturnsProjects(t *testing.T) {
 	project := autotasktest.ProjectFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(project))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_projects",
@@ -77,7 +76,7 @@ func TestSearchProjectsHandler_ReturnsProjects(t *testing.T) {
 // TestCreateProjectHandler_Success tests creating a project over wire.
 func TestCreateProjectHandler_Success(t *testing.T) {
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.ProjectFixture()))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_project",
@@ -107,7 +106,7 @@ func TestCreateProjectHandler_Success(t *testing.T) {
 // TestCreateProjectHandler_InvalidDate tests that an invalid date returns an error result over wire.
 func TestCreateProjectHandler_InvalidDate(t *testing.T) {
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.ProjectFixture()))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_project",
@@ -130,7 +129,7 @@ func TestCreateProjectHandler_InvalidDate(t *testing.T) {
 func TestSearchProjectsHandler_WithFilters(t *testing.T) {
 	project := autotasktest.ProjectFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(project))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_projects",

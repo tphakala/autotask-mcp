@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -21,7 +20,7 @@ func TestRegisterResourceTools_NoPanic(t *testing.T) {
 // TestSearchResourcesHandler_ReturnsNoResourcesFound tests the empty-result case over wire.
 func TestSearchResourcesHandler_ReturnsNoResourcesFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_resources",
@@ -47,7 +46,7 @@ func TestSearchResourcesHandler_ReturnsNoResourcesFound(t *testing.T) {
 func TestSearchResourcesHandler_ReturnsResources(t *testing.T) {
 	resource := autotasktest.ResourceFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(resource))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_resources",
@@ -76,7 +75,7 @@ func TestSearchResourcesHandler_ReturnsResources(t *testing.T) {
 func TestSearchResourcesHandler_WithFilters(t *testing.T) {
 	resource := autotasktest.ResourceFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(resource))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	active := true
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{

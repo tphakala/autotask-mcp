@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -73,7 +72,7 @@ func TestEntityToMap_SimpleStruct(t *testing.T) {
 
 	if v, ok := m["name"]; !ok {
 		t.Error("expected name field")
-	} else if !strings.Contains(v.(string), "<untrusted_content>") || !strings.Contains(v.(string), "Test") {
+	} else if !strings.Contains(v.(string), "<untrusted_content>") || !strings.Contains(v.(string), "Test") { //nolint:forcetypeassert // test asserts a known concrete type; a wrong type should fail the test loudly
 		t.Errorf("expected framed name, got %v", v)
 	}
 }
@@ -140,7 +139,7 @@ func TestSearchResult(t *testing.T) {
 		{"id": float64(102), "companyName": "Beta Inc", "phone": "555-5678"},
 	}
 
-	result, compact, err := searchResult(context.Background(), nil, items, "autotask_search_companies", 25)
+	result, compact, err := searchResult(t.Context(), nil, items, "autotask_search_companies", 25)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -205,7 +204,7 @@ func TestSearchResult_HasMoreBoundaries(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, resp, err := searchResult(context.Background(), nil, mk(tc.count), "autotask_search_tickets", tc.maxResults)
+			_, resp, err := searchResult(t.Context(), nil, mk(tc.count), "autotask_search_tickets", tc.maxResults)
 			if err != nil {
 				t.Fatalf("searchResult: %v", err)
 			}
@@ -228,7 +227,7 @@ func TestSearchResult_HasMoreBoundaries(t *testing.T) {
 // all three so that gap cannot ship.
 func TestRegisterAll_ToolSetMatchesDispatcherAndCategories(t *testing.T) {
 	cs, client := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// The set the built server actually exposes in full mode.
 	registered := map[string]struct{}{}

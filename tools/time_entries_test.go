@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -23,7 +22,7 @@ func TestRegisterTimeEntryTools_NoPanic(t *testing.T) {
 // TestSearchTimeEntriesHandler_ReturnsNoEntriesFound tests the empty-result case over wire.
 func TestSearchTimeEntriesHandler_ReturnsNoEntriesFound(t *testing.T) {
 	cs, _ := setupWireTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_time_entries",
@@ -49,7 +48,7 @@ func TestSearchTimeEntriesHandler_ReturnsNoEntriesFound(t *testing.T) {
 func TestSearchTimeEntriesHandler_ReturnsEntries(t *testing.T) {
 	entry := autotasktest.TimeEntryFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(entry))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "autotask_search_time_entries",
@@ -77,7 +76,7 @@ func TestSearchTimeEntriesHandler_ReturnsEntries(t *testing.T) {
 // TestCreateTimeEntryHandler_Success tests creating a time entry over wire.
 func TestCreateTimeEntryHandler_Success(t *testing.T) {
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.TimeEntryFixture()))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_time_entry",
@@ -106,7 +105,7 @@ func TestCreateTimeEntryHandler_Success(t *testing.T) {
 // TestCreateTimeEntryHandler_InvalidDate tests that an invalid date returns an error result over wire.
 func TestCreateTimeEntryHandler_InvalidDate(t *testing.T) {
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(autotasktest.TimeEntryFixture()))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_create_time_entry",
@@ -129,7 +128,7 @@ func TestCreateTimeEntryHandler_InvalidDate(t *testing.T) {
 func TestSearchTimeEntriesHandler_WithFilters(t *testing.T) {
 	entry := autotasktest.TimeEntryFixture()
 	cs, _ := setupWireTest(t, autotasktest.WithEntity(entry))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "autotask_search_time_entries",

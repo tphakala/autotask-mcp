@@ -123,7 +123,7 @@ func (c *clientCache) getOrCreate(key string, create func() (*tenantClient, erro
 	}
 	if el, ok := c.items[key]; ok {
 		c.ll.MoveToFront(el)
-		tenant := el.Value.(*cacheEntry).tenant
+		tenant := el.Value.(*cacheEntry).tenant //nolint:forcetypeassert // c.ll only ever holds *cacheEntry (see PushFront below)
 		c.mu.Unlock()
 		return tenant, nil
 	}
@@ -140,7 +140,7 @@ func (c *clientCache) getOrCreate(key string, create func() (*tenantClient, erro
 		}
 		if el, ok := c.items[key]; ok {
 			c.ll.MoveToFront(el)
-			tenant := el.Value.(*cacheEntry).tenant
+			tenant := el.Value.(*cacheEntry).tenant //nolint:forcetypeassert // c.ll only ever holds *cacheEntry (see PushFront below)
 			c.mu.Unlock()
 			return tenant, nil
 		}
@@ -166,7 +166,7 @@ func (c *clientCache) getOrCreate(key string, create func() (*tenantClient, erro
 		c.items[key] = el
 		if c.ll.Len() > c.capacity {
 			if back := c.ll.Back(); back != nil {
-				ev := back.Value.(*cacheEntry)
+				ev := back.Value.(*cacheEntry) //nolint:forcetypeassert // c.ll only ever holds *cacheEntry (see PushFront above)
 				c.ll.Remove(back)
 				delete(c.items, ev.key)
 				// Reference dropped, not closed; see the type doc. The entry just
@@ -180,7 +180,7 @@ func (c *clientCache) getOrCreate(key string, create func() (*tenantClient, erro
 	if err != nil {
 		return nil, err
 	}
-	return v.(*tenantClient), nil
+	return v.(*tenantClient), nil //nolint:forcetypeassert // the create closure returns only (*tenantClient, error)
 }
 
 // closeAll marks the cache closed, then drops and closes every cached entry. It is called
@@ -193,7 +193,7 @@ func (c *clientCache) closeAll() {
 	c.closed = true
 	tenants := make([]*tenantClient, 0, len(c.items))
 	for _, el := range c.items {
-		tenants = append(tenants, el.Value.(*cacheEntry).tenant)
+		tenants = append(tenants, el.Value.(*cacheEntry).tenant) //nolint:forcetypeassert // c.ll only ever holds *cacheEntry
 	}
 	c.ll.Init()
 	c.items = make(map[string]*list.Element)

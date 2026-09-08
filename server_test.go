@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -27,7 +26,7 @@ func TestBuildServer_LazyLoading(t *testing.T) {
 // connectInMemory wires an in-memory MCP client to the given server.
 func connectInMemory(t *testing.T, s *mcp.Server) *mcp.ClientSession {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	serverSession, err := s.Connect(ctx, serverTransport, nil)
@@ -51,41 +50,54 @@ func connectInMemory(t *testing.T, s *mcp.Server) *mcp.ClientSession {
 // registered, so the guidance routes through autotask_execute_tool.
 func TestBuildServer_PromptsRegisteredInBothModes(t *testing.T) {
 	for _, lazy := range []bool{false, true} {
-		lazy := lazy
 		name := "full"
 		if lazy {
 			name = "lazy"
 		}
 		t.Run(name, func(t *testing.T) {
-			_, client := autotasktest.NewServer(t)
-			cs := connectInMemory(t, buildServer(client, "", lazy))
-
-			pr, err := cs.ListPrompts(context.Background(), nil)
-			if err != nil {
-				t.Fatalf("ListPrompts: %v", err)
-			}
-			if len(pr.Prompts) != 4 {
-				t.Fatalf("expected 4 prompts (lazy=%v), got %d", lazy, len(pr.Prompts))
-			}
-
-			tr, err := cs.ListTools(context.Background(), nil)
-			if err != nil {
-				t.Fatalf("ListTools: %v", err)
-			}
-			names := make(map[string]bool, len(tr.Tools))
-			for _, tool := range tr.Tools {
-				names[tool.Name] = true
-			}
-			if lazy {
-				if !names["autotask_execute_tool"] {
-					t.Errorf("lazy mode should expose autotask_execute_tool meta-tool; tools: %v", names)
-				}
-				if names["autotask_get_ticket_details"] {
-					t.Errorf("lazy mode should not register direct tool autotask_get_ticket_details")
-				}
-			} else if !names["autotask_get_ticket_details"] {
-				t.Errorf("full mode should register direct tool autotask_get_ticket_details")
-			}
+			verifyServerPromptsAndTools(t, lazy)
 		})
+	}
+}
+
+func verifyServerPromptsAndTools(t *testing.T, lazy bool) {
+	t.Helper()
+	_, client := autotasktest.NewServer(t)
+	cs := connectInMemory(t, buildServer(client, "", lazy))
+
+	verifyPromptCount(t, cs, lazy)
+	verifyToolExposure(t, cs, lazy)
+}
+
+func verifyPromptCount(t *testing.T, cs *mcp.ClientSession, lazy bool) {
+	t.Helper()
+	pr, err := cs.ListPrompts(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListPrompts: %v", err)
+	}
+	if len(pr.Prompts) != 4 {
+		t.Fatalf("expected 4 prompts (lazy=%v), got %d", lazy, len(pr.Prompts))
+	}
+}
+
+func verifyToolExposure(t *testing.T, cs *mcp.ClientSession, lazy bool) {
+	t.Helper()
+	tr, err := cs.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	names := make(map[string]bool, len(tr.Tools))
+	for _, tool := range tr.Tools {
+		names[tool.Name] = true
+	}
+	if lazy {
+		if !names["autotask_execute_tool"] {
+			t.Errorf("lazy mode should expose autotask_execute_tool meta-tool; tools: %v", names)
+		}
+		if names["autotask_get_ticket_details"] {
+			t.Errorf("lazy mode should not register direct tool autotask_get_ticket_details")
+		}
+	} else if !names["autotask_get_ticket_details"] {
+		t.Errorf("full mode should register direct tool autotask_get_ticket_details")
 	}
 }

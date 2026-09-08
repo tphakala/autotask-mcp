@@ -11,7 +11,7 @@ func TestGetCompanyName_ZeroID(t *testing.T) {
 	client := autotasktest.NewMockClient(t)
 	cache := NewMappingCache(client)
 
-	name := cache.GetCompanyName(context.Background(), 0)
+	name := cache.GetCompanyName(t.Context(), 0)
 	if name != "" {
 		t.Errorf("expected empty string for id=0, got %q", name)
 	}
@@ -29,7 +29,7 @@ func TestGetCompanyName_FromAPI(t *testing.T) {
 	)
 	cache := NewMappingCache(client)
 
-	name := cache.GetCompanyName(context.Background(), 42)
+	name := cache.GetCompanyName(t.Context(), 42)
 	if name != "Acme Corp" {
 		t.Errorf("expected Acme Corp, got %q", name)
 	}
@@ -48,13 +48,13 @@ func TestGetCompanyName_CacheHit(t *testing.T) {
 	cache := NewMappingCache(client)
 
 	// First call populates cache
-	name1 := cache.GetCompanyName(context.Background(), 42)
+	name1 := cache.GetCompanyName(t.Context(), 42)
 	if name1 != "Acme Corp" {
 		t.Fatalf("first call: expected Acme Corp, got %q", name1)
 	}
 
 	// Second call should hit cache (no new HTTP request needed, fixture only served once but mock doesn't error on reuse)
-	name2 := cache.GetCompanyName(context.Background(), 42)
+	name2 := cache.GetCompanyName(t.Context(), 42)
 	if name2 != "Acme Corp" {
 		t.Errorf("cache hit: expected Acme Corp, got %q", name2)
 	}
@@ -65,7 +65,7 @@ func TestGetCompanyName_ErrorFallback(t *testing.T) {
 	client := autotasktest.NewMockClient(t)
 	cache := NewMappingCache(client)
 
-	name := cache.GetCompanyName(context.Background(), 99)
+	name := cache.GetCompanyName(t.Context(), 99)
 	if name != "Unknown (99)" {
 		t.Errorf("expected 'Unknown (99)', got %q", name)
 	}
@@ -86,7 +86,7 @@ func TestGetCompanyName_TransientErrorNotCached(t *testing.T) {
 	)
 	cache := NewMappingCache(client)
 
-	cancelled, cancel := context.WithCancel(context.Background())
+	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	if got := cache.GetCompanyName(cancelled, 42); got != "Unknown (42)" {
 		t.Fatalf("cancelled lookup: expected 'Unknown (42)', got %q", got)
@@ -94,7 +94,7 @@ func TestGetCompanyName_TransientErrorNotCached(t *testing.T) {
 
 	// A subsequent healthy lookup must resolve the real name, proving the
 	// transient failure did not poison the cache.
-	if got := cache.GetCompanyName(context.Background(), 42); got != "Acme Corp" {
+	if got := cache.GetCompanyName(t.Context(), 42); got != "Acme Corp" {
 		t.Errorf("after transient failure: expected 'Acme Corp' (cache not poisoned), got %q", got)
 	}
 }
@@ -114,13 +114,13 @@ func TestGetResourceName_TransientErrorNotCached(t *testing.T) {
 	)
 	cache := NewMappingCache(client)
 
-	cancelled, cancel := context.WithCancel(context.Background())
+	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	if got := cache.GetResourceName(cancelled, 42); got != "Unknown (42)" {
 		t.Fatalf("cancelled lookup: expected 'Unknown (42)', got %q", got)
 	}
 
-	if got := cache.GetResourceName(context.Background(), 42); got != "Jane Smith" {
+	if got := cache.GetResourceName(t.Context(), 42); got != "Jane Smith" {
 		t.Errorf("after transient failure: expected 'Jane Smith' (cache not poisoned), got %q", got)
 	}
 }
@@ -129,7 +129,7 @@ func TestGetResourceName_ZeroID(t *testing.T) {
 	client := autotasktest.NewMockClient(t)
 	cache := NewMappingCache(client)
 
-	name := cache.GetResourceName(context.Background(), 0)
+	name := cache.GetResourceName(t.Context(), 0)
 	if name != "" {
 		t.Errorf("expected empty string for id=0, got %q", name)
 	}
@@ -148,7 +148,7 @@ func TestGetResourceName_FromAPI(t *testing.T) {
 	)
 	cache := NewMappingCache(client)
 
-	name := cache.GetResourceName(context.Background(), 7)
+	name := cache.GetResourceName(t.Context(), 7)
 	if name != "John Doe" {
 		t.Errorf("expected John Doe, got %q", name)
 	}
@@ -158,7 +158,7 @@ func TestGetResourceName_ErrorFallback(t *testing.T) {
 	client := autotasktest.NewMockClient(t)
 	cache := NewMappingCache(client)
 
-	name := cache.GetResourceName(context.Background(), 55)
+	name := cache.GetResourceName(t.Context(), 55)
 	if name != "Unknown (55)" {
 		t.Errorf("expected 'Unknown (55)', got %q", name)
 	}
@@ -192,7 +192,7 @@ func TestEnhanceItems(t *testing.T) {
 		},
 	}
 
-	cache.EnhanceItems(context.Background(), items)
+	cache.EnhanceItems(t.Context(), items)
 
 	enhanced, ok := items[0]["_enhanced"].(map[string]any)
 	if !ok {
@@ -214,7 +214,7 @@ func TestEnhanceItems_NoEnhancedWhenNoIDs(t *testing.T) {
 		{"id": float64(1), "title": "No IDs here"},
 	}
 
-	cache.EnhanceItems(context.Background(), items)
+	cache.EnhanceItems(t.Context(), items)
 
 	if _, ok := items[0]["_enhanced"]; ok {
 		t.Error("expected no _enhanced map when no ID fields present")
@@ -239,7 +239,7 @@ func TestEnhanceItems_BatchPreload(t *testing.T) {
 		{"companyID": float64(companyID)}, // same company, should be deduplicated
 	}
 
-	cache.EnhanceItems(context.Background(), items)
+	cache.EnhanceItems(t.Context(), items)
 
 	// Both items should have enhancement.
 	for i, item := range items {
