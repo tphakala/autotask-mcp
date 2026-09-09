@@ -7,7 +7,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	github.com/tphakala/go-autotask v1.5.1
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.23.0
 )
 
 require (
